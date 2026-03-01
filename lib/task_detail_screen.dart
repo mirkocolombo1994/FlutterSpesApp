@@ -21,7 +21,7 @@ class TaskDetailScreen extends StatelessWidget {
             Text("Description", style: const TextStyle(fontWeight: FontWeight.bold)),
             Text(task.description),
             const SizedBox(height: 20),
-            Text("Due Date: ${task.dueDate.toString()}"),
+            Text("Due Date: ${task.dueDate.day}/${task.dueDate.month}/${task.dueDate.year}"),
             const Spacer(),
             // Tasto Elimina in fondo per sicurezza (come discusso)
             SizedBox(
