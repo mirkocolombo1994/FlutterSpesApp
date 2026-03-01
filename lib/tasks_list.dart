@@ -18,6 +18,8 @@ class _TasksListState extends State<TasksList> {
   bool _isSearching = false;
   final FocusNode _focusNode = FocusNode();
 
+  DateTime _selectedDate = DateTime.now();
+
   final TextEditingController _titleController = TextEditingController();
   final TextEditingController _descriptionController = TextEditingController();
   final TextEditingController _dueDateController = TextEditingController();
@@ -77,7 +79,20 @@ class _TasksListState extends State<TasksList> {
                   direction: DismissDirection.startToEnd,
                   key: Key(task.id),
                   onDismissed: (direction) {
+                    final deletedTask = task;
                     provider.removeTask(task.id);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text("Task ${deletedTask.title} deleted"),
+                        action: SnackBarAction(
+                          label: "Undo",
+                          onPressed: () {
+                            provider.addTask(deletedTask);
+                          },
+                          textColor: Colors.white,
+                        ),
+                      ),
+                    );
                   },
                   background: Container(
                     color: Colors.red.shade300,
@@ -181,13 +196,17 @@ class _TasksListState extends State<TasksList> {
                 controller: _dueDateController,
                 readOnly: true,
                 onTap: () async {
-                  DateTime? selectedDate = await showDatePicker(
+                  DateTime? pickedDate = await showDatePicker(
                     context: context,
                     initialDate: DateTime.now(),
-                    firstDate: DateTime.now(), lastDate: DateTime(2099),
+                    firstDate: DateTime.now(),
+                    lastDate: DateTime(2099),
                   );
-                  if (selectedDate != null) {
-                    _dueDateController.text = selectedDate.toString();
+                  if (pickedDate != null) {
+                    setState(() {
+                      _selectedDate = pickedDate;
+                      _dueDateController.text = "${pickedDate.day}/${pickedDate.month}/${pickedDate.year}";
+                    });
                   }
                 }
               ),
@@ -220,9 +239,10 @@ class _TasksListState extends State<TasksList> {
       id: uniqueId,
       title: _titleController.text,
       description: _descriptionController.text,
-      dueDate: _dueDateController.text.isNotEmpty ? DateTime.parse(_dueDateController.text) : DateTime.now()  ,
+      dueDate: _selectedDate,
       status: TaskStatus.todo,
     ));
+    _selectedDate = DateTime.now();
     clearController();
     Navigator.pop(context);
   }
