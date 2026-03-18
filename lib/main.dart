@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:task_master_app/task_provider.dart';
-import 'package:task_master_app/tasks_list.dart';
+import 'package:task_master_app/home_screen.dart';
 
 void main() {
   runApp(
@@ -27,7 +27,7 @@ class MyApp extends StatelessWidget {
           backgroundColor: Colors.indigo.shade100,
         ),
       ),
-      home: const TasksList(),
+      home: const HomeScreen(),
     );
   }
 }
