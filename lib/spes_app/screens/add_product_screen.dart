@@ -42,10 +42,12 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
     super.dispose();
   }
 
-  void _processScannedBarcode(String code) {
-    // Logica per i codici a barre a peso variabile (Ortofrutta, Gastronomia, Carne).
+  void _processScannedBarcode(String code) async {
+    String searchBarcode = code;
+
     if (code.length == 13 && code.startsWith('2')) {
-      final baseBarcode = code.substring(0, 7); // Manteniamo solo il codice prodotto
+      final baseBarcode = code.substring(0, 7);
+      searchBarcode = baseBarcode;
       final priceDigits = code.substring(7, 12);
       final parsedPrice = double.tryParse(priceDigits);
 
@@ -55,54 +57,54 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
         final priceInEuros = parsedPrice / 100.0;
         _priceController.text = priceInEuros.toStringAsFixed(2);
       }
+    } else {
+      _barcodeController.text = code;
+    }
 
-      final products = ref.read(productProvider);
-      final existingProduct = products.where((p) => p.barcode == baseBarcode).firstOrNull;
+    final products = ref.read(productProvider);
+    final existingProduct = products.where((p) => p.barcode == searchBarcode).firstOrNull;
 
-      if (existingProduct != null) {
-        _nameController.text = existingProduct.name;
-        _brandController.text = existingProduct.brand ?? '';
-        _description = existingProduct.description ?? '';
-        _weightUnit = existingProduct.weightUnit ?? 'kg';
-        
+    // Recupera lo storico prezzi per scoprire l'ultimo supermercato
+    final history = await ref.read(priceHistoryProvider).getHistoryForProduct(searchBarcode);
+    if (history.isNotEmpty && mounted) {
+      setState(() {
+        _selectedStoreId = history.first.storeId;
+      });
+    }
+
+    if (existingProduct != null) {
+      _nameController.text = existingProduct.name;
+      _brandController.text = existingProduct.brand ?? '';
+      _description = existingProduct.description ?? '';
+      _weightUnit = existingProduct.weightUnit ?? 'kg';
+      
+      bool isFresh = searchBarcode.length == 7 && searchBarcode.startsWith('2');
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('🏷️ Prodotto fresco riconosciuto: ${existingProduct.name}! Prezzo estratto: €${_priceController.text}'),
+            content: Text(isFresh 
+                ? '🏷️ Fresco riconosciuto: ${existingProduct.name}. Supermercato auto-impostato!' 
+                : '📦 Prodotto in archivio: ${existingProduct.name}. Supermercato auto-impostato!'),
             backgroundColor: Colors.green,
             duration: const Duration(seconds: 4),
           ),
         );
-      } else {
+      }
+    } else {
+      bool isFresh = searchBarcode.length == 7 && searchBarcode.startsWith('2');
+      if (isFresh) {
         if (_nameController.text.isEmpty) {
           _nameController.text = 'Prodotto Banco Fresco (Rilevato)';
         }
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('🏷️ Nuovo prodotto fresco! Memorizzalo con questo nome. Prezzo estratto automaticamente!'),
-            backgroundColor: Colors.indigo,
-            duration: Duration(seconds: 5),
-          ),
-        );
-      }
-    } else {
-      _barcodeController.text = code;
-      
-      final products = ref.read(productProvider);
-      final existingProduct = products.where((p) => p.barcode == code).firstOrNull;
-
-      if (existingProduct != null) {
-        _nameController.text = existingProduct.name;
-        _brandController.text = existingProduct.brand ?? '';
-        _description = existingProduct.description ?? '';
-        _weightUnit = existingProduct.weightUnit ?? 'kg';
-        
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('📦 Prodotto riconosciuto in archivio: ${existingProduct.name}'),
-            backgroundColor: Colors.green,
-            duration: const Duration(seconds: 3),
-          ),
-        );
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('🏷️ Nuovo prodotto fresco! Memorizzalo. Prezzo estratto!'),
+              backgroundColor: Colors.indigo,
+              duration: Duration(seconds: 4),
+            ),
+          );
+        }
       }
     }
   }
