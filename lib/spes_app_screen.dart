@@ -3,6 +3,7 @@ import 'spes_app/screens/shopping_lists_screen.dart';
 import 'spes_app/screens/products_screen.dart';
 import 'spes_app/screens/stores_screen.dart';
 import 'spes_app/screens/price_history_screen.dart';
+import 'spes_app/screens/current_shopping_screen.dart';
 
 class SpesAppScreen extends StatefulWidget {
   const SpesAppScreen({super.key});
@@ -15,6 +16,7 @@ class _SpesAppScreenState extends State<SpesAppScreen> {
   int _currentIndex = 0;
   
   final List<Widget> _pages = const [
+    CurrentShoppingScreen(),
     ShoppingListsScreen(),
     ProductsScreen(),
     StoresScreen(),
@@ -36,6 +38,10 @@ class _SpesAppScreenState extends State<SpesAppScreen> {
         selectedItemColor: Colors.indigo,
         unselectedItemColor: Colors.grey,
         items: const [
+          BottomNavigationBarItem(
+            icon: Icon(Icons.shopping_cart),
+            label: 'Cassa',
+          ),
           BottomNavigationBarItem(
             icon: Icon(Icons.receipt_long),
             label: 'Liste',

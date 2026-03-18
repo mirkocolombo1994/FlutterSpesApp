@@ -1,0 +1,125 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:uuid/uuid.dart';
+import 'barcode_scanner_screen.dart';
+import 'add_product_screen.dart';
+import '../providers/cart_provider.dart';
+import '../providers/product_provider.dart';
+import '../providers/price_history_provider.dart';
+
+class CurrentShoppingScreen extends ConsumerWidget {
+  const CurrentShoppingScreen({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final cartItems = ref.watch(cartProvider);
+    final total = cartItems.fold<double>(0, (sum, item) => sum + (item.price * item.quantity));
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Spesa in Corso'),
+        actions: [
+          if (cartItems.isNotEmpty)
+            IconButton(
+              icon: const Icon(Icons.delete_sweep),
+              onPressed: () {
+                ref.read(cartProvider.notifier).clear();
+              },
+              tooltip: 'Svuota Carrello',
+            )
+        ],
+      ),
+      body: Column(
+        children: [
+          Expanded(
+            child: cartItems.isEmpty
+                ? const Center(child: Padding(
+                    padding: EdgeInsets.all(32.0),
+                    child: Text(
+                      'Il tuo carrello è vuoto.\nScannerizza i prodotti mentre li metti nel carrello fisico per calcolare il totale in tempo reale!',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(fontSize: 16, color: Colors.grey),
+                    ),
+                  ))
+                : ListView.builder(
+                    itemCount: cartItems.length,
+                    itemBuilder: (context, index) {
+                      final item = cartItems[index];
+                      final isFresh = item.barcode.length == 7 && item.barcode.startsWith('2');
+                      
+                      return ListTile(
+                        leading: CircleAvatar(
+                          backgroundColor: Colors.indigo.shade100,
+                          child: Text('${item.quantity}x', style: const TextStyle(color: Colors.indigo, fontWeight: FontWeight.bold, fontSize: 13)),
+                        ),
+                        title: Text(item.name, style: const TextStyle(fontWeight: FontWeight.bold)),
+                        subtitle: Text(isFresh ? 'Fresco - €${item.price.toStringAsFixed(2)}' : '€${item.price.toStringAsFixed(2)} cad.'),
+                        trailing: IconButton(
+                          icon: const Icon(Icons.remove_circle, color: Colors.red),
+                          onPressed: () => ref.read(cartProvider.notifier).removeItem(item.id),
+                        ),
+                      );
+                    },
+                  ),
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+            decoration: BoxDecoration(
+              color: Colors.indigo.shade50,
+              border: Border(top: BorderSide(color: Colors.indigo.shade100, width: 2))
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text('Totale Cassa:', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+                Text('€${total.toStringAsFixed(2)}', style: const TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: Colors.green)),
+              ],
+            ),
+          ),
+          const SizedBox(height: 90), // Spazio per non coprire il riepilogo con il FAB
+        ],
+      ),
+      floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
+      floatingActionButton: FloatingActionButton.extended(
+        icon: const Icon(Icons.qr_code_scanner, size: 30),
+        label: const Text('Aggiungi Prodotto', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+        backgroundColor: Colors.indigo,
+        foregroundColor: Colors.white,
+        elevation: 6,
+        onPressed: () async {
+          // 1. Apri la fotocamera per scansionare il codice
+          final String? scannedCode = await Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => const BarcodeScannerScreen()),
+          );
+          
+          if (scannedCode != null) {
+            // 2. Apri la schermata prodotto pre-compilando il codice a barre letto
+            final resultBarcode = await Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => AddProductScreen(initialBarcode: scannedCode)),
+            );
+            
+            // 3. Aggiungi il prodotto al carrello se è stato salvato o confermato
+            if (resultBarcode != null && resultBarcode is String) {
+              final products = ref.read(productProvider);
+              final product = products.where((p) => p.barcode == resultBarcode).firstOrNull;
+              
+              final history = await ref.read(priceHistoryProvider).getHistoryForProduct(resultBarcode);
+              double price = history.isNotEmpty ? history.first.price : 0.0;
+
+              ref.read(cartProvider.notifier).addItem(
+                CartItem(
+                  id: const Uuid().v4(),
+                  barcode: resultBarcode,
+                  name: product?.name ?? 'Prodotto',
+                  price: price,
+                )
+              );
+            }
+          }
+        },
+      ),
+    );
+  }
+}

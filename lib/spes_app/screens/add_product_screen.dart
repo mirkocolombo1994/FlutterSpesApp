@@ -10,7 +10,8 @@ import 'barcode_scanner_screen.dart';
 import 'add_store_screen.dart';
 
 class AddProductScreen extends ConsumerStatefulWidget {
-  const AddProductScreen({super.key});
+  final String? initialBarcode;
+  const AddProductScreen({super.key, this.initialBarcode});
 
   @override
   ConsumerState<AddProductScreen> createState() => _AddProductScreenState();
@@ -30,6 +31,16 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
   String _description = '';
   String? _weightUnit = 'kg'; // Default unit
   String? _selectedStoreId;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.initialBarcode != null && widget.initialBarcode!.isNotEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _processScannedBarcode(widget.initialBarcode!);
+      });
+    }
+  }
 
   @override
   void dispose() {
@@ -146,7 +157,7 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
       );
       await ref.read(priceHistoryProvider).addPriceHistory(prHistory);
 
-      if (mounted) Navigator.pop(context);
+      if (mounted) Navigator.pop(context, _barcodeController.text);
     }
   }
 
