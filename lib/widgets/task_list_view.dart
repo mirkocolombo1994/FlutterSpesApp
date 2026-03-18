@@ -21,8 +21,11 @@ class TaskListView extends StatelessWidget {
               onDismissed: (direction) {
                 final deletedTask = task;
                 provider.removeTask(task.id);
+                // Pulisce gli snackbar in coda in modo che mostri subito quello attuale
+                ScaffoldMessenger.of(context).clearSnackBars();
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
+                    duration: const Duration(seconds: 5),
                     content: Text("Task ${deletedTask.title} deleted"),
                     action: SnackBarAction(
                       label: "Undo",
