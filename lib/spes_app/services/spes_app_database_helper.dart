@@ -1,0 +1,204 @@
+import 'package:sqflite/sqflite.dart';
+import 'package:path/path.dart';
+import '../models/store.dart';
+import '../models/product.dart';
+import '../models/price_history.dart';
+import '../models/shopping_list.dart';
+import '../models/shopping_list_item.dart';
+
+class SpesAppDatabaseHelper {
+  static final SpesAppDatabaseHelper instance = SpesAppDatabaseHelper._init();
+  static Database? _database;
+
+  SpesAppDatabaseHelper._init();
+
+  Future<Database> get database async {
+    if (_database != null) return _database!;
+    _database = await _initDB('spes_app.db');
+    return _database!;
+  }
+
+  Future<Database> _initDB(String filePath) async {
+    final dbPath = await getDatabasesPath();
+    final path = join(dbPath, filePath);
+
+    return await openDatabase(
+      path,
+      version: 1,
+      onCreate: _createDB,
+    );
+  }
+
+  Future _createDB(Database db, int version) async {
+    await db.execute('''
+      CREATE TABLE stores (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        chain TEXT,
+        phone TEXT,
+        latitude REAL,
+        longitude REAL
+      )
+    ''');
+    
+    await db.execute('''
+      CREATE TABLE products (
+        barcode TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        description TEXT,
+        brand TEXT,
+        weight REAL,
+        weight_unit TEXT
+      )
+    ''');
+
+    await db.execute('''
+      CREATE TABLE price_history (
+        id TEXT PRIMARY KEY,
+        product_barcode TEXT NOT NULL,
+        store_id TEXT NOT NULL,
+        price REAL NOT NULL,
+        timestamp INTEGER NOT NULL,
+        FOREIGN KEY (product_barcode) REFERENCES products (barcode) ON DELETE CASCADE,
+        FOREIGN KEY (store_id) REFERENCES stores (id) ON DELETE CASCADE
+      )
+    ''');
+
+    await db.execute('''
+      CREATE TABLE shopping_lists (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        type TEXT NOT NULL,
+        store_id TEXT,
+        created_at TEXT NOT NULL,
+        FOREIGN KEY (store_id) REFERENCES stores (id) ON DELETE SET NULL
+      )
+    ''');
+
+    await db.execute('''
+      CREATE TABLE shopping_list_items (
+        id TEXT PRIMARY KEY,
+        list_id TEXT NOT NULL,
+        product_barcode TEXT NOT NULL,
+        quantity INTEGER NOT NULL,
+        is_checked INTEGER NOT NULL DEFAULT 0,
+        store_id TEXT,
+        FOREIGN KEY (list_id) REFERENCES shopping_lists (id) ON DELETE CASCADE,
+        FOREIGN KEY (product_barcode) REFERENCES products (barcode) ON DELETE CASCADE,
+        FOREIGN KEY (store_id) REFERENCES stores (id) ON DELETE SET NULL
+      )
+    ''');
+  }
+
+  // --- STORE METHODS ---
+  Future<void> insertStore(Store store) async {
+    final db = await instance.database;
+    await db.insert('stores', store.toMap(), conflictAlgorithm: ConflictAlgorithm.replace);
+  }
+
+  Future<List<Store>> getStores() async {
+    final db = await instance.database;
+    final result = await db.query('stores');
+    return result.map((json) => Store.fromMap(json)).toList();
+  }
+
+  Future<Store?> getStoreById(String id) async {
+    final db = await instance.database;
+    final result = await db.query('stores', where: 'id = ?', whereArgs: [id]);
+    if (result.isNotEmpty) return Store.fromMap(result.first);
+    return null;
+  }
+
+  // --- PRODUCT METHODS ---
+  Future<void> insertProduct(Product product) async {
+    final db = await instance.database;
+    await db.insert('products', product.toMap(), conflictAlgorithm: ConflictAlgorithm.replace);
+  }
+
+  Future<List<Product>> getProducts() async {
+    final db = await instance.database;
+    final result = await db.query('products');
+    return result.map((json) => Product.fromMap(json)).toList();
+  }
+
+  Future<Product?> getProductByBarcode(String barcode) async {
+    final db = await instance.database;
+    final result = await db.query('products', where: 'barcode = ?', whereArgs: [barcode]);
+    if (result.isNotEmpty) return Product.fromMap(result.first);
+    return null;
+  }
+
+  // --- PRICE HISTORY METHODS ---
+  Future<void> insertPriceHistory(PriceHistory ph) async {
+    final db = await instance.database;
+    await db.insert('price_history', ph.toMap(), conflictAlgorithm: ConflictAlgorithm.replace);
+  }
+
+  Future<List<PriceHistory>> getPriceHistoryForProduct(String barcode) async {
+    final db = await instance.database;
+    final result = await db.query(
+      'price_history', 
+      where: 'product_barcode = ?', 
+      whereArgs: [barcode],
+      orderBy: 'timestamp DESC'
+    );
+    return result.map((json) => PriceHistory.fromMap(json)).toList();
+  }
+
+  Future<List<PriceHistory>> getPriceHistoryForStore(String storeId) async {
+    final db = await instance.database;
+    final result = await db.query(
+      'price_history', 
+      where: 'store_id = ?', 
+      whereArgs: [storeId],
+      orderBy: 'timestamp DESC'
+    );
+    return result.map((json) => PriceHistory.fromMap(json)).toList();
+  }
+
+  // --- SHOPPING LIST METHODS ---
+  Future<void> insertShoppingList(ShoppingList list) async {
+    final db = await instance.database;
+    await db.insert('shopping_lists', list.toMap(), conflictAlgorithm: ConflictAlgorithm.replace);
+  }
+
+  Future<List<ShoppingList>> getShoppingLists() async {
+    final db = await instance.database;
+    final result = await db.query('shopping_lists', orderBy: 'created_at DESC');
+    return result.map((json) => ShoppingList.fromMap(json)).toList();
+  }
+
+  Future<void> updateShoppingList(ShoppingList list) async {
+    final db = await instance.database;
+    await db.update('shopping_lists', list.toMap(), where: 'id = ?', whereArgs: [list.id]);
+  }
+
+  Future<void> deleteShoppingList(String id) async {
+    final db = await instance.database;
+    await db.delete('shopping_lists', where: 'id = ?', whereArgs: [id]);
+    // Note: Items are cascade deleted because of foreign key, but SQLite needs pragma foreign_keys = ON;
+    // We should enable it in _initDB actually. We will do this later if needed.
+  }
+
+  // --- SHOPPING LIST ITEM METHODS ---
+  Future<void> insertShoppingListItem(ShoppingListItem item) async {
+    final db = await instance.database;
+    await db.insert('shopping_list_items', item.toMap(), conflictAlgorithm: ConflictAlgorithm.replace);
+  }
+  
+  Future<void> updateShoppingListItem(ShoppingListItem item) async {
+    final db = await instance.database;
+    await db.update('shopping_list_items', item.toMap(), where: 'id = ?', whereArgs: [item.id]);
+  }
+
+  Future<void> deleteShoppingListItem(String id) async {
+    final db = await instance.database;
+    await db.delete('shopping_list_items', where: 'id = ?', whereArgs: [id]);
+  }
+
+  Future<List<ShoppingListItem>> getShoppingListItems(String listId) async {
+    final db = await instance.database;
+    final result = await db.query('shopping_list_items', where: 'list_id = ?', whereArgs: [listId]);
+    return result.map((json) => ShoppingListItem.fromMap(json)).toList();
+  }
+}

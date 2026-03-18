@@ -1,13 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:task_master_app/task_provider.dart';
 import 'package:task_master_app/home_screen.dart';
 
 void main() {
   runApp(
-    ChangeNotifierProvider(
-      create: (context) => TaskProvider(),
-      child: const MyApp(),
+    ProviderScope( // Riverpod injection
+      child: ChangeNotifierProvider( // legacy Provider
+        create: (context) => TaskProvider(),
+        child: const MyApp(),
+      ),
     ),
   );
 }
