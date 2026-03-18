@@ -57,7 +57,8 @@ class _PriceHistoryScreenState extends ConsumerState<PriceHistoryScreen> {
                         ],
                         rows: history.map((h) {
                           final date = DateTime.fromMillisecondsSinceEpoch(h.timestamp);
-                          final storeName = stores.firstWhere((s) => s.id == h.storeId, orElse: () => null as dynamic)?.name ?? 'Ignoto';
+                          final store = stores.where((s) => s.id == h.storeId).firstOrNull;
+                          final storeName = store?.name ?? 'Ignoto';
                           return DataRow(cells: [
                             DataCell(Text(DateFormat('dd/MM/yyyy HH:mm').format(date))),
                             DataCell(Text(storeName)),
@@ -115,7 +116,8 @@ class _PriceHistoryScreenState extends ConsumerState<PriceHistoryScreen> {
                         ],
                         rows: history.map((h) {
                           final date = DateTime.fromMillisecondsSinceEpoch(h.timestamp);
-                          final productName = products.firstWhere((p) => p.barcode == h.productBarcode, orElse: () => null as dynamic)?.name ?? 'Ignoto';
+                          final product = products.where((p) => p.barcode == h.productBarcode).firstOrNull;
+                          final productName = product?.name ?? 'Ignoto';
                           return DataRow(cells: [
                             DataCell(Text(DateFormat('dd/MM/yyyy HH:mm').format(date))),
                             DataCell(Text(productName)),

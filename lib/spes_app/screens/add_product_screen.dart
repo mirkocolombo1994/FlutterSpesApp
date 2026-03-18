@@ -8,6 +8,7 @@ import '../providers/price_history_provider.dart';
 import 'package:uuid/uuid.dart';
 // TODO: Import mobile_scanner for barcode scanning
 import 'barcode_scanner_screen.dart';
+import 'add_store_screen.dart';
 
 class AddProductScreen extends ConsumerStatefulWidget {
   const AddProductScreen({super.key});
@@ -163,17 +164,38 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
               ],
             ),
             const SizedBox(height: 16),
-            DropdownButtonFormField<String>(
-              decoration: const InputDecoration(
-                labelText: 'In quale punto vendita ti trovi?',
-                border: OutlineInputBorder(),
-              ),
-              items: stores.map((s) => DropdownMenuItem(value: s.id, child: Text(s.name))).toList(),
-              onChanged: (value) {
-                setState(() {
-                  _selectedStoreId = value;
-                });
-              },
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: DropdownButtonFormField<String>(
+                    decoration: const InputDecoration(
+                      labelText: 'In quale punto vendita ti trovi?',
+                      border: OutlineInputBorder(),
+                    ),
+                    value: stores.any((s) => s.id == _selectedStoreId) ? _selectedStoreId : null,
+                    items: stores.map((s) => DropdownMenuItem(value: s.id, child: Text(s.name))).toList(),
+                    onChanged: (value) {
+                      setState(() {
+                        _selectedStoreId = value;
+                      });
+                    },
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.only(left: 8.0, top: 2.0),
+                  child: IconButton(
+                    icon: const Icon(Icons.add_business, size: 36, color: Colors.indigo),
+                    tooltip: 'Aggiungi nuovo punto vendita',
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (context) => const AddStoreScreen()),
+                      );
+                    },
+                  ),
+                ),
+              ],
             ),
             const SizedBox(height: 16),
             TextFormField(
