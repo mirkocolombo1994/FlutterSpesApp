@@ -19,7 +19,20 @@ class TaskProvider extends ChangeNotifier {
     inizializzaDB();
   }
 
-  List<Task> get filteredTasks => _searchText.isNotEmpty ? _myTasks.where((task) => task.title.toLowerCase().contains(_searchText.toLowerCase())).toList() : _myTasks;
+  List<Task> get filteredTasks {
+    final List<Task> tasks = _searchText.isNotEmpty
+        ? _myTasks
+              .where(
+                (task) => task.title.toLowerCase().contains(
+                  _searchText.toLowerCase(),
+                ),
+              )
+              .toList()
+        : List.from(_myTasks); // Create a new list to allow sorting
+
+    tasks.sort((a, b) => a.dueDate.compareTo(b.dueDate));
+    return tasks;
+  }
 
   Future<void> inizializzaDB() async {
     _myTasks = await DatabaseHelper.instance.readAllTasks();
@@ -44,12 +57,13 @@ class TaskProvider extends ChangeNotifier {
         description: oldTask.description,
         dueDate: oldTask.dueDate,
         // Logica di switch: se è todo diventa complete, altrimenti todo
-        status: oldTask.status == TaskStatus.todo ? TaskStatus.done : TaskStatus.todo,
+        status: oldTask.status == TaskStatus.todo
+            ? TaskStatus.done
+            : TaskStatus.todo,
       );
 
       await DatabaseHelper.instance.updateTask(_myTasks[index]);
       // In Dart, per attivare il refresh, spesso è meglio sostituire l'oggetto
-
 
       // QUESTO avvisa l'interfaccia di ridisegnarsi
       notifyListeners();
