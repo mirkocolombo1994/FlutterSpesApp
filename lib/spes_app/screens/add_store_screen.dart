@@ -35,7 +35,7 @@ class _AddStoreScreenState extends ConsumerState<AddStoreScreen> {
       );
       
       ref.read(storeProvider.notifier).addStore(newStore);
-      Navigator.pop(context);
+      Navigator.pop(context, newStore.id);
     }
   }
 

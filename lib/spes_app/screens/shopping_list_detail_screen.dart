@@ -33,13 +33,17 @@ class _ShoppingListDetailScreenState extends ConsumerState<ShoppingListDetailScr
     for (var item in items) {
       final history = await priceHistoryService.getHistoryForProduct(item.productBarcode);
       
+      bool isFresh = item.productBarcode.startsWith('2') && item.productBarcode.length == 7;
+      
       if (widget.shoppingList.type == ShoppingListType.classic) {
         final targetStoreId = widget.shoppingList.storeId;
         final storePrices = history.where((h) => h.storeId == targetStoreId).toList();
         if (storePrices.isNotEmpty) {
-           double price = storePrices.first.price;
+           double price = isFresh 
+               ? storePrices.map((h) => h.price).reduce((a, b) => a + b) / storePrices.length 
+               : storePrices.first.price;
            total += price * item.quantity;
-           itemDetails[item.id] = {'price': price};
+           itemDetails[item.id] = {'price': price, 'isAverage': isFresh};
         } else {
            itemDetails[item.id] = {'warning': 'Non venduto qui'};
         }
@@ -48,9 +52,11 @@ class _ShoppingListDetailScreenState extends ConsumerState<ShoppingListDetailScr
         final targetStoreId = item.storeId;
         final storePrices = history.where((h) => h.storeId == targetStoreId).toList();
         if (storePrices.isNotEmpty) {
-           double price = storePrices.first.price;
+           double price = isFresh 
+               ? storePrices.map((h) => h.price).reduce((a, b) => a + b) / storePrices.length 
+               : storePrices.first.price;
            total += price * item.quantity;
-           itemDetails[item.id] = {'price': price, 'storeId': targetStoreId};
+           itemDetails[item.id] = {'price': price, 'storeId': targetStoreId, 'isAverage': isFresh};
         } else {
            itemDetails[item.id] = {'warning': 'Prezzo non trovato'};
         }
@@ -59,18 +65,30 @@ class _ShoppingListDetailScreenState extends ConsumerState<ShoppingListDetailScr
         if (history.isEmpty) {
            itemDetails[item.id] = {'warning': 'Nessun prezzo registrato'};
         } else {
-           // Trova il prezzo minimo tra i vari store
-           Map<String, double> latestPricePerStore = {};
-           for (var h in history) {
-             if (!latestPricePerStore.containsKey(h.storeId)) {
-               latestPricePerStore[h.storeId] = h.price;
+           Map<String, double> targetPricePerStore = {};
+           
+           if (isFresh) {
+             // Calcola la media dei prezzi per ogni store
+             Map<String, List<double>> pricesPerStore = {};
+             for (var h in history) {
+                pricesPerStore.putIfAbsent(h.storeId, () => []).add(h.price);
+             }
+             pricesPerStore.forEach((sId, prices) {
+                targetPricePerStore[sId] = prices.reduce((a, b) => a + b) / prices.length;
+             });
+           } else {
+             // Prezzo più recente per ogni store
+             for (var h in history) {
+               if (!targetPricePerStore.containsKey(h.storeId)) {
+                 targetPricePerStore[h.storeId] = h.price;
+               }
              }
            }
            
-           String bestStoreId = latestPricePerStore.keys.first;
-           double minPrice = latestPricePerStore[bestStoreId]!;
+           String bestStoreId = targetPricePerStore.keys.first;
+           double minPrice = targetPricePerStore[bestStoreId]!;
            
-           latestPricePerStore.forEach((sId, price) {
+           targetPricePerStore.forEach((sId, price) {
              if (price < minPrice) {
                minPrice = price;
                bestStoreId = sId;
@@ -78,7 +96,7 @@ class _ShoppingListDetailScreenState extends ConsumerState<ShoppingListDetailScr
            });
            
            total += minPrice * item.quantity;
-           itemDetails[item.id] = {'price': minPrice, 'storeId': bestStoreId};
+           itemDetails[item.id] = {'price': minPrice, 'storeId': bestStoreId, 'isAverage': isFresh};
         }
       }
     }
@@ -93,8 +111,13 @@ class _ShoppingListDetailScreenState extends ConsumerState<ShoppingListDetailScr
     );
 
     if (barcode != null && barcode is String) {
+      String searchBarcode = barcode;
+      if (barcode.length == 13 && barcode.startsWith('2')) {
+        searchBarcode = barcode.substring(0, 7); // Estrai id radice per i banchi freschi
+      }
+
       final products = ref.read(productProvider);
-      final exists = products.any((p) => p.barcode == barcode);
+      final exists = products.any((p) => p.barcode == searchBarcode);
       
       if (!exists) {
         if (mounted) {
@@ -108,7 +131,7 @@ class _ShoppingListDetailScreenState extends ConsumerState<ShoppingListDetailScr
       String? storeIdForMix;
       
       if (widget.shoppingList.type == ShoppingListType.mix) {
-        final history = await ref.read(priceHistoryProvider).getHistoryForProduct(barcode);
+        final history = await ref.read(priceHistoryProvider).getHistoryForProduct(searchBarcode);
         final availableStoreIds = history.map((h) => h.storeId).toSet();
         
         if (availableStoreIds.isEmpty) {
@@ -140,7 +163,7 @@ class _ShoppingListDetailScreenState extends ConsumerState<ShoppingListDetailScr
       final newItem = ShoppingListItem(
         id: const Uuid().v4(),
         listId: widget.shoppingList.id,
-        productBarcode: barcode,
+        productBarcode: searchBarcode,
         quantity: 1,
         storeId: storeIdForMix,
       );
@@ -155,7 +178,8 @@ class _ShoppingListDetailScreenState extends ConsumerState<ShoppingListDetailScr
     if (details.containsKey('warning')) {
       subtitle += ' - ⚠️ ${details['warning']}';
     } else if (details.containsKey('price')) {
-      subtitle += ' - €${details['price'].toStringAsFixed(2)} cad.';
+      final isAvg = details['isAverage'] == true;
+      subtitle += ' - €${details['price'].toStringAsFixed(2)} ${isAvg ? '(Stimato/Medio)' : 'cad.'}';
     }
 
     if (details.containsKey('storeId')) {

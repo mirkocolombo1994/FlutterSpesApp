@@ -24,9 +24,23 @@ class SpesAppDatabaseHelper {
 
     return await openDatabase(
       path,
-      version: 1,
+      version: 2,
       onCreate: _createDB,
+      onUpgrade: _upgradeDB,
+      onConfigure: (db) async {
+        await db.execute('PRAGMA foreign_keys = ON');
+      },
     );
+  }
+
+  Future _upgradeDB(Database db, int oldVersion, int newVersion) async {
+    if (oldVersion < 2) {
+      try {
+        await db.execute('ALTER TABLE products ADD COLUMN price_per_kg REAL');
+      } catch (_) {
+        // Ignora in caso esista già durante lo sviluppo
+      }
+    }
   }
 
   Future _createDB(Database db, int version) async {
@@ -48,7 +62,8 @@ class SpesAppDatabaseHelper {
         description TEXT,
         brand TEXT,
         weight REAL,
-        weight_unit TEXT
+        weight_unit TEXT,
+        price_per_kg REAL
       )
     ''');
 

@@ -5,6 +5,7 @@ class Product {
   final String? brand;
   final double? weight;
   final String? weightUnit;
+  final double? pricePerKg;
 
   Product({
     required this.barcode,
@@ -13,6 +14,7 @@ class Product {
     this.brand,
     this.weight,
     this.weightUnit,
+    this.pricePerKg,
   });
 
   Map<String, dynamic> toMap() {
@@ -23,6 +25,7 @@ class Product {
       'brand': brand,
       'weight': weight,
       'weight_unit': weightUnit,
+      'price_per_kg': pricePerKg,
     };
   }
 
@@ -34,6 +37,7 @@ class Product {
       brand: map['brand'],
       weight: map['weight'],
       weightUnit: map['weight_unit'],
+      pricePerKg: map['price_per_kg'],
     );
   }
 }
