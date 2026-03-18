@@ -23,11 +23,19 @@ class StoresScreen extends ConsumerWidget {
                 return Card(
                   margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                   child: ListTile(
-                    leading: const Icon(Icons.storefront, color: Colors.indigo, size: 40),
-                    title: Text(store.name, style: const TextStyle(fontWeight: FontWeight.bold)),
+                    leading: Icon(Icons.storefront, color: store.isClosed ? Colors.grey : Colors.indigo, size: 40),
+                    title: Text(
+                      store.name, 
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        decoration: store.isClosed ? TextDecoration.lineThrough : null,
+                      )
+                    ),
                     subtitle: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
+                        if (store.isClosed)
+                          const Text('CHIUSO DEFINITIVAMENTE', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
                         if (store.chain != null && store.chain!.isNotEmpty) 
                           Text('Catena: ${store.chain}'),
                         if (store.phone != null && store.phone!.isNotEmpty) 
@@ -36,6 +44,13 @@ class StoresScreen extends ConsumerWidget {
                           const Text('Posizione salvata sulla mappa', style: TextStyle(color: Colors.green, fontSize: 12)),
                       ],
                     ),
+                    trailing: const Icon(Icons.edit, color: Colors.grey),
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (context) => AddStoreScreen(storeToEdit: store)),
+                      );
+                    },
                   ),
                 );
               },

@@ -25,4 +25,16 @@ class StoreNotifier extends Notifier<List<Store>> {
     await SpesAppDatabaseHelper.instance.insertStore(store);
     await loadStores(); // Ricarica per riflettere i cambiamenti
   }
+
+  // Aggiorna un supermercato esistente
+  Future<void> updateStore(Store store) async {
+    await SpesAppDatabaseHelper.instance.updateStore(store);
+    await loadStores();
+  }
+
+  // Elimina un supermercato
+  Future<void> deleteStore(String id) async {
+    await SpesAppDatabaseHelper.instance.deleteStore(id);
+    await loadStores();
+  }
 }

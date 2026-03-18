@@ -24,7 +24,7 @@ class SpesAppDatabaseHelper {
 
     return await openDatabase(
       path,
-      version: 2,
+      version: 3,
       onCreate: _createDB,
       onUpgrade: _upgradeDB,
       onConfigure: (db) async {
@@ -41,6 +41,11 @@ class SpesAppDatabaseHelper {
         // Ignora in caso esista già durante lo sviluppo
       }
     }
+    if (oldVersion < 3) {
+      try {
+        await db.execute('ALTER TABLE stores ADD COLUMN is_closed INTEGER DEFAULT 0');
+      } catch (_) {}
+    }
   }
 
   Future _createDB(Database db, int version) async {
@@ -51,7 +56,8 @@ class SpesAppDatabaseHelper {
         chain TEXT,
         phone TEXT,
         latitude REAL,
-        longitude REAL
+        longitude REAL,
+        is_closed INTEGER DEFAULT 0
       )
     ''');
     
@@ -122,6 +128,39 @@ class SpesAppDatabaseHelper {
     final result = await db.query('stores', where: 'id = ?', whereArgs: [id]);
     if (result.isNotEmpty) return Store.fromMap(result.first);
     return null;
+  }
+
+  Future<void> updateStore(Store store) async {
+    final db = await instance.database;
+    await db.update('stores', store.toMap(), where: 'id = ?', whereArgs: [store.id]);
+  }
+
+  Future<void> deleteStore(String id) async {
+    final db = await instance.database;
+    await db.delete('stores', where: 'id = ?', whereArgs: [id]);
+  }
+
+  // --- CLEANUP ---
+  Future<void> deleteProductsExclusiveToStore(String storeId) async {
+    final db = await instance.database;
+    final currentStoreHistories = await db.query('price_history', where: 'store_id = ?', whereArgs: [storeId]);
+    final productBarcodes = currentStoreHistories.map((h) => h['product_barcode'] as String).toSet().toList();
+    
+    for (String barcode in productBarcodes) {
+      final otherStoresCountResult = await db.rawQuery(
+        'SELECT COUNT(DISTINCT store_id) as c FROM price_history WHERE product_barcode = ? AND store_id != ?',
+        [barcode, storeId]
+      );
+      int count = otherStoresCountResult.first['c'] as int;
+      if (count == 0) {
+        await db.delete('products', where: 'barcode = ?', whereArgs: [barcode]);
+      }
+    }
+  }
+
+  Future<void> deletePriceHistoryForStore(String storeId) async {
+    final db = await instance.database;
+    await db.delete('price_history', where: 'store_id = ?', whereArgs: [storeId]);
   }
 
   // --- PRODUCT METHODS ---

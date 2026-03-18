@@ -5,6 +5,7 @@ class Store {
   final String? phone;
   final double? latitude;
   final double? longitude;
+  final bool isClosed;
 
   Store({
     required this.id,
@@ -13,6 +14,7 @@ class Store {
     this.phone,
     this.latitude,
     this.longitude,
+    this.isClosed = false,
   });
 
   Map<String, dynamic> toMap() {
@@ -23,17 +25,29 @@ class Store {
       'phone': phone,
       'latitude': latitude,
       'longitude': longitude,
+      'is_closed': isClosed ? 1 : 0,
     };
   }
 
   factory Store.fromMap(Map<String, dynamic> map) {
+    bool parsedIsClosed = false;
+    if (map['is_closed'] != null) {
+      if (map['is_closed'] is int) {
+        parsedIsClosed = map['is_closed'] == 1;
+      } else if (map['is_closed'] is bool) {
+        parsedIsClosed = map['is_closed'] as bool;
+      }
+    }
+
     return Store(
-      id: map['id'],
-      name: map['name'],
-      chain: map['chain'],
-      phone: map['phone'],
-      latitude: map['latitude'],
-      longitude: map['longitude'],
+      id: map['id']?.toString() ?? '',
+      name: map['name']?.toString() ?? 'Sconosciuto',
+      chain: map['chain']?.toString(),
+      phone: map['phone']?.toString(),
+      latitude: map['latitude'] != null ? (map['latitude'] as num).toDouble() : null,
+      longitude: map['longitude'] != null ? (map['longitude'] as num).toDouble() : null,
+      isClosed: parsedIsClosed,
     );
   }
 }
+
