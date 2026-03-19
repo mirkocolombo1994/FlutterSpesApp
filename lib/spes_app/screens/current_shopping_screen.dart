@@ -164,25 +164,46 @@ class _CurrentShoppingScreenState extends ConsumerState<CurrentShoppingScreen> {
             final storeId = await gpsFuture;
             if (mounted) Navigator.pop(context);
 
-            // 3. Apri la schermata prodotto pre-compilando il codice a barre letto E il punto vendita!
-            final resultBarcode = await Navigator.push(
-              context,
-              MaterialPageRoute(builder: (context) => AddProductScreen(initialBarcode: scannedCode, preselectedStoreId: storeId)),
-            );
+            // 3. Controlla se il prodotto esiste già in anagrafica
+            final products = ref.read(productProvider);
+            final existingProduct = products.where((p) => p.barcode == scannedCode).firstOrNull;
+
+            String? finalBarcodeToAdd;
+
+            if (existingProduct != null) {
+              // Il prodotto è già conosciuto: "passaggio in cassa" automatico
+              finalBarcodeToAdd = scannedCode;
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                  content: Text('✅ Aggiunto: ${existingProduct.name}'),
+                  backgroundColor: Colors.green,
+                  duration: const Duration(seconds: 2),
+                ));
+              }
+            } else {
+              // Prodotto nuovo, apri la schermata di inserimento
+              final result = await Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => AddProductScreen(initialBarcode: scannedCode, preselectedStoreId: storeId)),
+              );
+              if (result != null && result is String) {
+                finalBarcodeToAdd = result;
+              }
+            }
             
             // 4. Aggiungi il prodotto al carrello se è stato salvato o confermato
-            if (resultBarcode != null && resultBarcode is String) {
-              final products = ref.read(productProvider);
-              final product = products.where((p) => p.barcode == resultBarcode).firstOrNull;
+            if (finalBarcodeToAdd != null) {
+              final productList = ref.read(productProvider);
+              final product = productList.where((p) => p.barcode == finalBarcodeToAdd).firstOrNull;
               
-              final history = await ref.read(priceHistoryProvider).getHistoryForProduct(resultBarcode);
+              final history = await ref.read(priceHistoryProvider).getHistoryForProduct(finalBarcodeToAdd);
               double price = history.isNotEmpty ? history.first.price : 0.0;
 
               ref.read(cartProvider.notifier).addItem(
                 CartItem(
                   id: const Uuid().v4(),
-                  barcode: resultBarcode,
-                  name: product?.name ?? 'Prodotto',
+                  barcode: finalBarcodeToAdd,
+                  name: product?.name ?? 'Prodotto sconosciuto',
                   price: price,
                 )
               );
