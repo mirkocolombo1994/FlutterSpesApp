@@ -224,8 +224,9 @@ class _AddStoreScreenState extends ConsumerState<AddStoreScreen> {
                     _longitude = (result['latLng'] as LatLng).longitude;
                     
                     final String? foundName = result['name'];
-                    if (foundName != null && foundName.isNotEmpty && _nameCtrl.text.isEmpty) {
-                       _nameCtrl.text = foundName;
+                    if (foundName != null && foundName.isNotEmpty && !foundName.contains('Coordinate scelte')) {
+                       if (_nameCtrl.text.isEmpty) _nameCtrl.text = foundName;
+                       if (_chainCtrl.text.isEmpty) _chainCtrl.text = foundName;
                     }
                   });
                 }

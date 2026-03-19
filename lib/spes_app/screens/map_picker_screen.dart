@@ -76,29 +76,76 @@ class _MapPickerScreenState extends State<MapPickerScreen> {
     });
 
     try {
-      final uri = Uri.parse('https://nominatim.openstreetmap.org/reverse?lat=${latlng.latitude}&lon=${latlng.longitude}&format=json&addressdetails=1');
+      // 1. Prova prima con il Reverse Geocoding Standard (preciso al tap)
+      final uri = Uri.parse('https://nominatim.openstreetmap.org/reverse?lat=${latlng.latitude}&lon=${latlng.longitude}&format=json&zoom=18&addressdetails=1');
       final response = await http.get(uri, headers: {
-        'User-Agent': 'SpesApp/1.0 (test@example.com)'
-      });
+        'User-Agent': 'FlutterSpesApp/1.0.0 (mirkocolombo1994@github.com)',
+        'Accept-Language': 'it'
+      }).timeout(const Duration(seconds: 10));
 
-      if (response.statusCode == 200 && mounted) {
+      String? placeName;
+
+      if (response.statusCode == 200) {
         final data = json.decode(response.body);
-        if (data != null && data['address'] != null) {
-          final address = data['address'];
-          
-          String? placeName = address['supermarket'] ?? address['shop'] ?? address['mall'] ?? data['name'];
-          
-          if (placeName == null || placeName.isEmpty) {
-             placeName = address['road'] ?? address['city'];
+        if (data != null && data['error'] == null) {
+          if (data['display_name'] != null) {
+            placeName = data['display_name'].toString().split(',').first.trim();
           }
+        }
+      } else {
+        placeName = "HTTP Nom: ${response.statusCode} - ${response.body}";
+      }
+
+      // Se Nominatim ha fallito (es. 403) o non ha trovato nulla
+      if (placeName == null || placeName.toLowerCase().startsWith('via ') || placeName.toLowerCase().startsWith('viale ')) {
+        try {
+          final overpassQuery = '''
+            [out:json];
+            (
+              node["shop"="supermarket"](around:150, ${latlng.latitude}, ${latlng.longitude});
+              way["shop"="supermarket"](around:150, ${latlng.latitude}, ${latlng.longitude});
+              rel["shop"="supermarket"](around:150, ${latlng.latitude}, ${latlng.longitude});
+              node["shop"="convenience"](around:150, ${latlng.latitude}, ${latlng.longitude});
+            );
+            out tags;
+          ''';
           
-          setState(() {
-            _selectedPlaceName = placeName;
-          });
+          final overpassUri = Uri.parse('https://overpass-api.de/api/interpreter');
+          final overpassResp = await http.post(overpassUri, body: overpassQuery, headers: {'User-Agent':'FlutterSpesApp/1.0.0 (mirkocolombo1994@github.com)'}).timeout(const Duration(seconds: 10));
+          
+          if (overpassResp.statusCode == 200) {
+            final opData = json.decode(overpassResp.body);
+            if (opData['elements'] != null && (opData['elements'] as List).isNotEmpty) {
+               final elements = opData['elements'] as List;
+               for (var el in elements) {
+                 if (el['tags'] != null && el['tags']['name'] != null) {
+                   placeName = el['tags']['name'] + " (Trovato nei dintorni)";
+                   break;
+                 }
+               }
+            }
+          }
+        } catch (_) {
         }
       }
+
+      if (placeName == null || placeName.isEmpty || placeName.startsWith('HTTP')) {
+         placeName = 'Coordinate scelte sulla mappa';
+      }
+      
+      if (mounted) {
+        setState(() {
+          _selectedPlaceName = placeName;
+        });
+      }
+
     } catch (e) {
-      debugPrint("Errore Nominatim: $e");
+      if (mounted) {
+        setState(() {
+          _selectedPlaceName = "Errore Rete/Timeout API";
+        });
+      }
+      debugPrint("Errore Mappa: $e");
     } finally {
       if (mounted) {
         setState(() {
