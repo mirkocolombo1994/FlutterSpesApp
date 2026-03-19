@@ -29,14 +29,20 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
   final _weightController = TextEditingController();
   final _priceController = TextEditingController();
   final _pricePerKgController = TextEditingController();
+  final _discountPercentController = TextEditingController();
 
   String _description = '';
   String? _weightUnit = 'kg'; // Default unit
   String? _selectedStoreId;
+  String? _promoType = 'Nessuna';
+  DateTime? _promoValidUntil;
+  final List<String> _promoTypes = ['Nessuna', 'Sconto %', 'Prezzo Tagliato', '1+1', '3x2', 'Altro'];
 
   @override
   void initState() {
     super.initState();
+    _priceController.addListener(_calculatePricePerKg);
+    _weightController.addListener(_calculatePricePerKg);
     if (widget.preselectedStoreId != null) {
       _selectedStoreId = widget.preselectedStoreId;
     }
@@ -55,7 +61,30 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
     _weightController.dispose();
     _priceController.dispose();
     _pricePerKgController.dispose();
+    _discountPercentController.dispose();
     super.dispose();
+  }
+
+  void _calculatePricePerKg() {
+    final price = double.tryParse(_priceController.text.replaceAll(',', '.'));
+    final weight = double.tryParse(_weightController.text.replaceAll(',', '.'));
+    if (price != null && weight != null && weight > 0) {
+      double calculatedPrice = 0.0;
+      switch (_weightUnit) {
+        case 'g':
+        case 'ml':
+          calculatedPrice = price / (weight / 1000);
+          break;
+        case 'kg':
+        case 'l':
+        case 'pz':
+          calculatedPrice = price / weight;
+          break;
+      }
+      _pricePerKgController.text = calculatedPrice.toStringAsFixed(2);
+    } else {
+      _pricePerKgController.text = '';
+    }
   }
 
   void _processScannedBarcode(String code) async {
@@ -155,12 +184,20 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
       await ref.read(productProvider.notifier).addProduct(newProduct);
 
       // Salva record dello storico
+      int? expirationTimestamp = _promoValidUntil?.millisecondsSinceEpoch;
+      String? cleanPromoType = _promoType == 'Nessuna' ? null : _promoType;
+      if (cleanPromoType == 'Sconto %' && _discountPercentController.text.isNotEmpty) {
+        cleanPromoType = 'Sconto ${_discountPercentController.text}%';
+      }
+
       final prHistory = PriceHistory(
         id: const Uuid().v4(),
         productBarcode: _barcodeController.text,
         storeId: _selectedStoreId!,
         price: priceValue,
         timestamp: DateTime.now().millisecondsSinceEpoch,
+        promoType: cleanPromoType,
+        promoValidUntil: expirationTimestamp,
       );
       await ref.read(priceHistoryProvider).addPriceHistory(prHistory);
 
@@ -256,6 +293,7 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
                     setState(() {
                       _weightUnit = newValue;
                     });
+                    _calculatePricePerKg();
                   },
                 )
               ],
@@ -318,10 +356,74 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
               validator: (value) {
                 if (value == null || value.isEmpty) return 'Inserisci prezzo';
-                if (double.tryParse(value) == null) return 'Prezzo non valido';
+                if (double.tryParse(value.replaceAll(',', '.')) == null) return 'Prezzo non valido';
                 return null;
               },
             ),
+            const SizedBox(height: 16),
+            DropdownButtonFormField<String>(
+              decoration: const InputDecoration(
+                labelText: 'Promozione',
+                border: OutlineInputBorder(),
+              ),
+              value: _promoType,
+              items: _promoTypes.map((pt) => DropdownMenuItem(value: pt, child: Text(pt))).toList(),
+              onChanged: (val) {
+                setState(() {
+                  _promoType = val;
+                });
+              },
+            ),
+            if (_promoType == 'Sconto %') ...[
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: _discountPercentController,
+                decoration: const InputDecoration(
+                  labelText: 'Percentuale Sconto (%)',
+                  border: OutlineInputBorder(),
+                ),
+                keyboardType: TextInputType.number,
+              ),
+            ],
+            if (_promoType != null && _promoType != 'Nessuna') ...[
+              const SizedBox(height: 16),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                title: Text(_promoValidUntil == null 
+                  ? 'Nessuna Scadenza Selezionata' 
+                  : 'Fino al: ${_promoValidUntil!.day.toString().padLeft(2, '0')}/${_promoValidUntil!.month.toString().padLeft(2, '0')}/${_promoValidUntil!.year}'),
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (_promoValidUntil != null)
+                      IconButton(
+                        icon: const Icon(Icons.clear, color: Colors.grey),
+                        onPressed: () {
+                          setState(() {
+                            _promoValidUntil = null;
+                          });
+                        }
+                      ),
+                    IconButton(
+                      icon: const Icon(Icons.calendar_month),
+                      onPressed: () async {
+                        final date = await showDatePicker(
+                          context: context, 
+                          initialDate: DateTime.now(), 
+                          firstDate: DateTime.now(), 
+                          lastDate: DateTime.now().add(const Duration(days: 365))
+                        );
+                        if (date != null) {
+                          setState(() {
+                            _promoValidUntil = date;
+                          });
+                        }
+                      }
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ],
         ),
       ),

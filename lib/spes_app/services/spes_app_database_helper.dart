@@ -24,7 +24,7 @@ class SpesAppDatabaseHelper {
 
     return await openDatabase(
       path,
-      version: 3,
+      version: 4,
       onCreate: _createDB,
       onUpgrade: _upgradeDB,
       onConfigure: (db) async {
@@ -44,6 +44,12 @@ class SpesAppDatabaseHelper {
     if (oldVersion < 3) {
       try {
         await db.execute('ALTER TABLE stores ADD COLUMN is_closed INTEGER DEFAULT 0');
+      } catch (_) {}
+    }
+    if (oldVersion < 4) {
+      try {
+        await db.execute('ALTER TABLE price_history ADD COLUMN promo_type TEXT');
+        await db.execute('ALTER TABLE price_history ADD COLUMN promo_valid_until INTEGER');
       } catch (_) {}
     }
   }
@@ -80,6 +86,8 @@ class SpesAppDatabaseHelper {
         store_id TEXT NOT NULL,
         price REAL NOT NULL,
         timestamp INTEGER NOT NULL,
+        promo_type TEXT,
+        promo_valid_until INTEGER,
         FOREIGN KEY (product_barcode) REFERENCES products (barcode) ON DELETE CASCADE,
         FOREIGN KEY (store_id) REFERENCES stores (id) ON DELETE CASCADE
       )

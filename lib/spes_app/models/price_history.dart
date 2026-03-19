@@ -4,6 +4,8 @@ class PriceHistory {
   final String storeId;
   final double price;
   final int timestamp; // Unix timestamp in milliseconds
+  final String? promoType;
+  final int? promoValidUntil;
 
   PriceHistory({
     required this.id,
@@ -11,6 +13,8 @@ class PriceHistory {
     required this.storeId,
     required this.price,
     required this.timestamp,
+    this.promoType,
+    this.promoValidUntil,
   });
 
   Map<String, dynamic> toMap() {
@@ -20,6 +24,8 @@ class PriceHistory {
       'store_id': storeId,
       'price': price,
       'timestamp': timestamp,
+      'promo_type': promoType,
+      'promo_valid_until': promoValidUntil,
     };
   }
 
@@ -30,6 +36,8 @@ class PriceHistory {
       storeId: map['store_id'],
       price: map['price'],
       timestamp: map['timestamp'],
+      promoType: map['promo_type'],
+      promoValidUntil: map['promo_valid_until'],
     );
   }
 }

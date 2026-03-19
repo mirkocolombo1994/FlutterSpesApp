@@ -115,8 +115,35 @@ class _CurrentShoppingScreenState extends ConsumerState<CurrentShoppingScreen> {
                           backgroundColor: Colors.indigo.shade100,
                           child: Text('${item.quantity}x', style: const TextStyle(color: Colors.indigo, fontWeight: FontWeight.bold, fontSize: 13)),
                         ),
-                        title: Text(item.name, style: const TextStyle(fontWeight: FontWeight.bold)),
-                        subtitle: Text(isFresh ? 'Fresco - €${item.price.toStringAsFixed(2)}' : '€${item.price.toStringAsFixed(2)} cad.'),
+                        title: Row(
+                          children: [
+                            Expanded(child: Text(item.name, style: const TextStyle(fontWeight: FontWeight.bold))),
+                            if (item.promoType != null)
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: Colors.orange.shade100,
+                                  borderRadius: BorderRadius.circular(4),
+                                  border: Border.all(color: Colors.orange),
+                                ),
+                                child: Text(
+                                  item.promoType!,
+                                  style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.orange),
+                                ),
+                              ),
+                          ],
+                        ),
+                        subtitle: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(isFresh ? 'Fresco - €${item.price.toStringAsFixed(2)}' : '€${item.price.toStringAsFixed(2)} cad.'),
+                            if (item.unitPrice != null && item.unitPrice! > 0)
+                              Text(
+                                '(${item.unitPrice!.toStringAsFixed(2)} €/unità)',
+                                style: TextStyle(fontSize: 11, color: Colors.grey.shade600, fontStyle: FontStyle.italic),
+                              ),
+                          ],
+                        ),
                         trailing: IconButton(
                           icon: const Icon(Icons.remove_circle, color: Colors.red),
                           onPressed: () => ref.read(cartProvider.notifier).removeItem(item.id),
@@ -198,7 +225,8 @@ class _CurrentShoppingScreenState extends ConsumerState<CurrentShoppingScreen> {
               final product = productList.where((p) => p.barcode == finalBarcodeToAdd).firstOrNull;
               
               final history = await ref.read(priceHistoryProvider).getHistoryForProduct(finalBarcodeToAdd);
-              double price = history.isNotEmpty ? history.first.price : 0.0;
+              final latestHistory = history.isNotEmpty ? history.first : null;
+              double price = latestHistory?.price ?? 0.0;
 
               ref.read(cartProvider.notifier).addItem(
                 CartItem(
@@ -206,6 +234,8 @@ class _CurrentShoppingScreenState extends ConsumerState<CurrentShoppingScreen> {
                   barcode: finalBarcodeToAdd,
                   name: product?.name ?? 'Prodotto sconosciuto',
                   price: price,
+                  unitPrice: product?.pricePerKg,
+                  promoType: latestHistory?.promoType,
                 )
               );
             }

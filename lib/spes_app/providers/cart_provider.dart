@@ -5,6 +5,8 @@ class CartItem {
   final String barcode;
   final String name;
   final double price;
+  final double? unitPrice; // Prezzo al kg/l/pz
+  final String? promoType; // Sconto, 1+1, etc.
   int quantity;
 
   CartItem({
@@ -12,6 +14,8 @@ class CartItem {
     required this.barcode,
     required this.name,
     required this.price,
+    this.unitPrice,
+    this.promoType,
     this.quantity = 1,
   });
 }
@@ -32,6 +36,8 @@ class CartNotifier extends Notifier<List<CartItem>> {
           barcode: curr.barcode,
           name: curr.name,
           price: curr.price,
+          unitPrice: curr.unitPrice,
+          promoType: curr.promoType,
           quantity: curr.quantity + 1,
         ),
         ...state.sublist(idx + 1),

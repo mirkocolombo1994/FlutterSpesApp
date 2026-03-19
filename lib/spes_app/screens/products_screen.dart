@@ -32,7 +32,12 @@ class ProductsScreen extends ConsumerWidget {
                           Text('Marca: ${product.brand}'),
                         Text('Barcode: ${product.barcode}'),
                         if (product.weight != null)
-                          Text('${product.weight} ${product.weightUnit ?? ""}'),
+                          Text('Formato: ${product.weight} ${product.weightUnit ?? ""}'),
+                        if (product.pricePerKg != null && product.pricePerKg! > 0)
+                          Text(
+                            'Riferimento: ${product.pricePerKg!.toStringAsFixed(2)} €/unità',
+                            style: const TextStyle(color: Colors.blueGrey, fontWeight: FontWeight.w500),
+                          ),
                       ],
                     ),
                   ),
