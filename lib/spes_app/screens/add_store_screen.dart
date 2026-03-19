@@ -19,6 +19,10 @@ class AddStoreScreen extends ConsumerStatefulWidget {
 
 class _AddStoreScreenState extends ConsumerState<AddStoreScreen> {
   final _formKey = GlobalKey<FormState>();
+  final _nameCtrl = TextEditingController();
+  final _chainCtrl = TextEditingController();
+  final _phoneCtrl = TextEditingController();
+
   String _name = '';
   String _chain = '';
   String _phone = '';
@@ -31,12 +35,21 @@ class _AddStoreScreenState extends ConsumerState<AddStoreScreen> {
     super.initState();
     if (widget.storeToEdit != null) {
       _name = widget.storeToEdit!.name;
-      _chain = widget.storeToEdit!.chain ?? '';
-      _phone = widget.storeToEdit!.phone ?? '';
+      _nameCtrl.text = _name;
+      _chainCtrl.text = widget.storeToEdit!.chain ?? '';
+      _phoneCtrl.text = widget.storeToEdit!.phone ?? '';
       _latitude = widget.storeToEdit!.latitude;
       _longitude = widget.storeToEdit!.longitude;
       _isClosed = widget.storeToEdit!.isClosed;
     }
+  }
+
+  @override
+  void dispose() {
+    _nameCtrl.dispose();
+    _chainCtrl.dispose();
+    _phoneCtrl.dispose();
+    super.dispose();
   }
 
   void _saveStore() {
@@ -181,20 +194,20 @@ class _AddStoreScreenState extends ConsumerState<AddStoreScreen> {
                ),
             const SizedBox(height: 16),
             TextFormField(
-              initialValue: _name,
+              controller: _nameCtrl,
               decoration: const InputDecoration(labelText: 'Nome Supermercato *', border: OutlineInputBorder()),
               validator: (value) => value == null || value.isEmpty ? 'Inserisci un nome' : null,
               onSaved: (value) => _name = value!,
             ),
             const SizedBox(height: 16),
             TextFormField(
-              initialValue: _chain,
+              controller: _chainCtrl,
               decoration: const InputDecoration(labelText: 'Catena (es. Esselunga, Conad)', border: OutlineInputBorder()),
               onSaved: (value) => _chain = value ?? '',
             ),
             const SizedBox(height: 16),
             TextFormField(
-              initialValue: _phone,
+              controller: _phoneCtrl,
               decoration: const InputDecoration(labelText: 'Telefono', border: OutlineInputBorder()),
               keyboardType: TextInputType.phone,
               onSaved: (value) => _phone = value ?? '',
@@ -204,11 +217,16 @@ class _AddStoreScreenState extends ConsumerState<AddStoreScreen> {
               icon: const Icon(Icons.map),
               label: const Text('Seleziona Posizione sulla Mappa'),
               onPressed: () async {
-                final LatLng? result = await Navigator.push(context, MaterialPageRoute(builder: (context) => const MapPickerScreen()));
-                if (result != null) {
+                final result = await Navigator.push(context, MaterialPageRoute(builder: (context) => const MapPickerScreen()));
+                if (result != null && result is Map<String, dynamic>) {
                   setState(() {
-                    _latitude = result.latitude;
-                    _longitude = result.longitude;
+                    _latitude = (result['latLng'] as LatLng).latitude;
+                    _longitude = (result['latLng'] as LatLng).longitude;
+                    
+                    final String? foundName = result['name'];
+                    if (foundName != null && foundName.isNotEmpty && _nameCtrl.text.isEmpty) {
+                       _nameCtrl.text = foundName;
+                    }
                   });
                 }
               },

@@ -45,5 +45,9 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>SpesApp deve accedere alla posizione per trovare il supermercato in cui ti trovi.</string>
+	<key>NSLocationAlwaysUsageDescription</key>
+	<string>SpesApp deve accedere alla posizione per trovare il supermercato in cui ti trovi.</string>
 </dict>
 </plist>
