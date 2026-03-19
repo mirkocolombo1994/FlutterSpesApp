@@ -6,12 +6,74 @@ import 'add_product_screen.dart';
 import '../providers/cart_provider.dart';
 import '../providers/product_provider.dart';
 import '../providers/price_history_provider.dart';
+import '../providers/store_provider.dart';
+import '../models/store.dart';
+import '../services/location_service.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:latlong2/latlong.dart';
 
-class CurrentShoppingScreen extends ConsumerWidget {
+class CurrentShoppingScreen extends ConsumerStatefulWidget {
   const CurrentShoppingScreen({super.key});
+  @override
+  ConsumerState<CurrentShoppingScreen> createState() => _CurrentShoppingScreenState();
+}
+
+class _CurrentShoppingScreenState extends ConsumerState<CurrentShoppingScreen> {
+
+  Future<String?> _fetchGpsAndStore(WidgetRef ref) async {
+    try {
+      if (!await Geolocator.isLocationServiceEnabled()) return null;
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+         permission = await Geolocator.requestPermission();
+      }
+      if (permission != LocationPermission.whileInUse && permission != LocationPermission.always) return null;
+
+      final pos = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high).timeout(const Duration(seconds: 8));
+
+      final stores = ref.read(storeProvider);
+      final distance = const Distance();
+      Store? closestStore;
+      double minDistance = double.infinity;
+
+      for (var s in stores) {
+        if (s.latitude != null && s.longitude != null) {
+          final d = distance.as(LengthUnit.Meter, LatLng(pos.latitude, pos.longitude), LatLng(s.latitude!, s.longitude!));
+          // Raggio di 100 metri
+          if (d < 100 && d < minDistance) {
+            minDistance = d;
+            closestStore = s;
+          }
+        }
+      }
+
+      if (closestStore != null) return closestStore.id;
+
+      // Cerca il nome dalle coordinate se non hai supermercati salvati
+      final placeName = await LocationService.lookupSupermarketName(pos.latitude, pos.longitude);
+      if (placeName != null) {
+        final newStore = Store(
+          id: const Uuid().v4(),
+          name: placeName,
+          chain: placeName,
+          latitude: pos.latitude,
+          longitude: pos.longitude,
+        );
+        await ref.read(storeProvider.notifier).addStore(newStore);
+        if (mounted) {
+           ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+             content: Text('📍 Nuovo supermercato salvato in automatico: $placeName'),
+             backgroundColor: Colors.green,
+           ));
+        }
+        return newStore.id;
+      }
+    } catch (_) {}
+    return null;
+  }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final cartItems = ref.watch(cartProvider);
     final total = cartItems.fold<double>(0, (sum, item) => sum + (item.price * item.quantity));
 
@@ -87,20 +149,28 @@ class CurrentShoppingScreen extends ConsumerWidget {
         foregroundColor: Colors.white,
         elevation: 6,
         onPressed: () async {
-          // 1. Apri la fotocamera per scansionare il codice
+          // 1. Avvia la ricerca GPS in sottofondo senza rallentare o bloccare la videocamera!
+          final gpsFuture = _fetchGpsAndStore(ref);
+
+          // 2. Apri la fotocamera per scansionare il codice
           final String? scannedCode = await Navigator.push(
             context,
             MaterialPageRoute(builder: (context) => const BarcodeScannerScreen()),
           );
           
           if (scannedCode != null) {
-            // 2. Apri la schermata prodotto pre-compilando il codice a barre letto
+            // Se la fotocamera si è chiusa velocemente, aspetta che il GPS finisca di cercare in background
+            showDialog(context: context, barrierDismissible: false, builder: (_) => const Center(child: CircularProgressIndicator()));
+            final storeId = await gpsFuture;
+            if (mounted) Navigator.pop(context);
+
+            // 3. Apri la schermata prodotto pre-compilando il codice a barre letto E il punto vendita!
             final resultBarcode = await Navigator.push(
               context,
-              MaterialPageRoute(builder: (context) => AddProductScreen(initialBarcode: scannedCode)),
+              MaterialPageRoute(builder: (context) => AddProductScreen(initialBarcode: scannedCode, preselectedStoreId: storeId)),
             );
             
-            // 3. Aggiungi il prodotto al carrello se è stato salvato o confermato
+            // 4. Aggiungi il prodotto al carrello se è stato salvato o confermato
             if (resultBarcode != null && resultBarcode is String) {
               final products = ref.read(productProvider);
               final product = products.where((p) => p.barcode == resultBarcode).firstOrNull;

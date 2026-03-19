@@ -11,7 +11,9 @@ import 'add_store_screen.dart';
 
 class AddProductScreen extends ConsumerStatefulWidget {
   final String? initialBarcode;
-  const AddProductScreen({super.key, this.initialBarcode});
+  final String? preselectedStoreId;
+
+  const AddProductScreen({super.key, this.initialBarcode, this.preselectedStoreId});
 
   @override
   ConsumerState<AddProductScreen> createState() => _AddProductScreenState();
@@ -35,6 +37,9 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
   @override
   void initState() {
     super.initState();
+    if (widget.preselectedStoreId != null) {
+      _selectedStoreId = widget.preselectedStoreId;
+    }
     if (widget.initialBarcode != null && widget.initialBarcode!.isNotEmpty) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _processScannedBarcode(widget.initialBarcode!);
@@ -77,7 +82,9 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
 
     // Recupera lo storico prezzi per scoprire l'ultimo supermercato
     final history = await ref.read(priceHistoryProvider).getHistoryForProduct(searchBarcode);
-    if (history.isNotEmpty && mounted) {
+    if (widget.preselectedStoreId != null) {
+       // Ha già precedenza perché impostato in initState
+    } else if (history.isNotEmpty && mounted) {
       setState(() {
         _selectedStoreId = history.first.storeId;
       });
