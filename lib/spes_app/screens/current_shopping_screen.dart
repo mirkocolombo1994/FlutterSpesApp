@@ -60,6 +60,7 @@ class _CurrentShoppingScreenState extends ConsumerState<CurrentShoppingScreen> {
           longitude: pos.longitude,
         );
         await ref.read(storeProvider.notifier).addStore(newStore);
+        ref.read(newlyAddedStoreIdProvider.notifier).setId(newStore.id);
         if (mounted) {
            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
              content: Text('📍 Nuovo supermercato salvato in automatico: $placeName'),

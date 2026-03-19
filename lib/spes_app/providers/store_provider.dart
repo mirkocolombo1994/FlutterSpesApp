@@ -38,3 +38,15 @@ class StoreNotifier extends Notifier<List<Store>> {
     await loadStores();
   }
 }
+
+// Provider per conservare l'ID del supermercato appena aggiunto in automatico, in modo da evidenziarlo
+final newlyAddedStoreIdProvider = NotifierProvider<NewlyAddedStoreNotifier, String?>(() {
+  return NewlyAddedStoreNotifier();
+});
+
+class NewlyAddedStoreNotifier extends Notifier<String?> {
+  @override
+  String? build() => null;
+
+  void setId(String? id) => state = id;
+}

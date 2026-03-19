@@ -9,6 +9,14 @@ class StoresScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final stores = ref.watch(storeProvider);
+    final newlyAddedId = ref.watch(newlyAddedStoreIdProvider);
+    
+    if (newlyAddedId != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        // Reset directly by invalidating or setting to null, so it only highlights the first time it's built
+        ref.read(newlyAddedStoreIdProvider.notifier).setId(null);
+      });
+    }
 
     return Scaffold(
       appBar: AppBar(
@@ -20,14 +28,23 @@ class StoresScreen extends ConsumerWidget {
               itemCount: stores.length,
               itemBuilder: (context, index) {
                 final store = stores[index];
+                final isNew = store.id == newlyAddedId;
                 return Card(
                   margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  shape: isNew ? RoundedRectangleBorder(
+                    side: BorderSide(color: Colors.green.shade600, width: 2.5),
+                    borderRadius: BorderRadius.circular(12),
+                  ) : null,
+                  elevation: isNew ? 8 : 1,
                   child: ListTile(
-                    leading: Icon(Icons.storefront, color: store.isClosed ? Colors.grey : Colors.indigo, size: 40),
+                    leading: isNew 
+                      ? const Icon(Icons.new_releases, color: Colors.green, size: 40)
+                      : Icon(Icons.storefront, color: store.isClosed ? Colors.grey : Colors.indigo, size: 40),
                     title: Text(
-                      store.name, 
+                      isNew ? '${store.name} (NUOVO!)' : store.name, 
                       style: TextStyle(
                         fontWeight: FontWeight.bold,
+                        color: isNew ? Colors.green.shade800 : null,
                         decoration: store.isClosed ? TextDecoration.lineThrough : null,
                       )
                     ),
