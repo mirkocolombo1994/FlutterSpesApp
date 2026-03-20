@@ -77,6 +77,9 @@ class _CurrentShoppingScreenState extends ConsumerState<CurrentShoppingScreen> {
   Widget build(BuildContext context) {
     final cartItems = ref.watch(cartProvider);
     final total = cartItems.fold<double>(0, (sum, item) => sum + (item.price * item.quantity));
+    final activeStoreId = ref.watch(activeStoreIdProvider);
+    final stores = ref.watch(storeProvider);
+    final currentStore = stores.where((s) => s.id == activeStoreId).firstOrNull;
 
     return Scaffold(
       appBar: AppBar(
@@ -94,6 +97,34 @@ class _CurrentShoppingScreenState extends ConsumerState<CurrentShoppingScreen> {
       ),
       body: Column(
         children: [
+          // Selettore Punto Vendita
+          Container(
+            padding: const EdgeInsets.all(12),
+            color: Colors.indigo.shade100.withOpacity(0.3),
+            child: Row(
+              children: [
+                const Icon(Icons.location_on, color: Colors.indigo),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('Punto Vendita:', style: TextStyle(fontSize: 12, color: Colors.indigo)),
+                      Text(
+                        currentStore?.name ?? 'Supermercato non rilevato',
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                      ),
+                    ],
+                  ),
+                ),
+                TextButton.icon(
+                  onPressed: () => _showStoreSelector(context, ref, stores),
+                  icon: const Icon(Icons.edit_location_alt, size: 18),
+                  label: const Text('Cambia'),
+                ),
+              ],
+            ),
+          ),
           Expanded(
             child: cartItems.isEmpty
                 ? const Center(child: Padding(
@@ -118,8 +149,19 @@ class _CurrentShoppingScreenState extends ConsumerState<CurrentShoppingScreen> {
                         title: Row(
                           children: [
                             Expanded(child: Text(item.name, style: const TextStyle(fontWeight: FontWeight.bold))),
+                            if (item.status == CartItemStatus.warning)
+                               const Tooltip(
+                                 message: 'Prezzo mancante in questo negozio',
+                                 child: Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 20),
+                               ),
+                            if (item.status == CartItemStatus.error)
+                               const Tooltip(
+                                 message: 'Prodotto non censito in questo negozio',
+                                 child: Icon(Icons.error_outline, color: Colors.red, size: 20),
+                               ),
                             if (item.promoType != null)
                               Container(
+                                margin: const EdgeInsets.only(left: 8),
                                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                 decoration: BoxDecoration(
                                   color: Colors.orange.shade100,
@@ -192,6 +234,11 @@ class _CurrentShoppingScreenState extends ConsumerState<CurrentShoppingScreen> {
             final storeId = await gpsFuture;
             if (mounted) Navigator.pop(context);
 
+            // Se viene rilevato uno store ed è diverso da quello attuale, impostalo o chiedi conferma
+            if (storeId != null && ref.read(activeStoreIdProvider) == null) {
+               ref.read(activeStoreIdProvider.notifier).setId(storeId);
+            }
+
             // 3. Controlla se il prodotto esiste già in anagrafica
             final products = ref.read(productProvider);
             final existingProduct = products.where((p) => p.barcode == scannedCode).firstOrNull;
@@ -212,7 +259,7 @@ class _CurrentShoppingScreenState extends ConsumerState<CurrentShoppingScreen> {
               // Prodotto nuovo, apri la schermata di inserimento
               final result = await Navigator.push(
                 context,
-                MaterialPageRoute(builder: (context) => AddProductScreen(initialBarcode: scannedCode, preselectedStoreId: storeId)),
+                MaterialPageRoute(builder: (context) => AddProductScreen(initialBarcode: scannedCode, preselectedStoreId: ref.read(activeStoreIdProvider))),
               );
               if (result != null && result is String) {
                 finalBarcodeToAdd = result;
@@ -224,9 +271,19 @@ class _CurrentShoppingScreenState extends ConsumerState<CurrentShoppingScreen> {
               final productList = ref.read(productProvider);
               final product = productList.where((p) => p.barcode == finalBarcodeToAdd).firstOrNull;
               
+              final currentStoreId = ref.read(activeStoreIdProvider);
               final history = await ref.read(priceHistoryProvider).getHistoryForProduct(finalBarcodeToAdd);
-              final latestHistory = history.isNotEmpty ? history.first : null;
+              
+              // Se abbiamo uno store attivo, cerchiamo il prezzo specifico per quello store
+              final storeHistory = currentStoreId != null ? history.where((h) => h.storeId == currentStoreId).firstOrNull : null;
+              final latestHistory = storeHistory ?? (history.isNotEmpty ? history.first : null);
+              
               double price = latestHistory?.price ?? 0.0;
+              CartItemStatus status = CartItemStatus.ok;
+              if (currentStoreId != null) {
+                if (storeHistory == null) status = CartItemStatus.error;
+                else if (price <= 0) status = CartItemStatus.warning;
+              }
 
               ref.read(cartProvider.notifier).addItem(
                 CartItem(
@@ -236,12 +293,38 @@ class _CurrentShoppingScreenState extends ConsumerState<CurrentShoppingScreen> {
                   price: price,
                   unitPrice: product?.pricePerKg,
                   promoType: latestHistory?.promoType,
+                  status: status,
                 )
               );
             }
           }
         },
       ),
+    );
+  }
+
+  void _showStoreSelector(BuildContext context, WidgetRef ref, List<Store> stores) {
+    showModalBottomSheet(
+      context: context,
+      builder: (context) {
+        return ListView.builder(
+          itemCount: stores.length,
+          itemBuilder: (context, index) {
+            final s = stores[index];
+            return ListTile(
+              leading: const Icon(Icons.store),
+              title: Text(s.name),
+              trailing: ref.watch(activeStoreIdProvider) == s.id ? const Icon(Icons.check, color: Colors.green) : null,
+              onTap: () async {
+                ref.read(activeStoreIdProvider.notifier).setId(s.id);
+                // Aggiorna tutti i prezzi nel carrello
+                await ref.read(cartProvider.notifier).refreshPrices(s.id, ref);
+                if (context.mounted) Navigator.pop(context);
+              },
+            );
+          },
+        );
+      },
     );
   }
 }

@@ -13,8 +13,10 @@ class StoresScreen extends ConsumerWidget {
     
     if (newlyAddedId != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        // Reset directly by invalidating or setting to null, so it only highlights the first time it's built
-        ref.read(newlyAddedStoreIdProvider.notifier).setId(null);
+        // Reset after a delay so the user can see the highlight
+        Future.delayed(const Duration(seconds: 3), () {
+           ref.read(newlyAddedStoreIdProvider.notifier).setId(null);
+        });
       });
     }
 

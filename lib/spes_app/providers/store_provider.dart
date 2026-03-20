@@ -50,3 +50,15 @@ class NewlyAddedStoreNotifier extends Notifier<String?> {
 
   void setId(String? id) => state = id;
 }
+
+// Provider che tiene traccia del supermercato attualmente attivo nella spesa in corso
+final activeStoreIdProvider = NotifierProvider<ActiveStoreNotifier, String?>(() {
+  return ActiveStoreNotifier();
+});
+
+class ActiveStoreNotifier extends Notifier<String?> {
+  @override
+  String? build() => null;
+
+  void setId(String? id) => state = id;
+}

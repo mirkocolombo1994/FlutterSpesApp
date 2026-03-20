@@ -1,4 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'price_history_provider.dart';
+
+enum CartItemStatus { ok, warning, error }
 
 class CartItem {
   final String id;
@@ -7,6 +10,7 @@ class CartItem {
   final double price;
   final double? unitPrice; // Prezzo al kg/l/pz
   final String? promoType; // Sconto, 1+1, etc.
+  final CartItemStatus status;
   int quantity;
 
   CartItem({
@@ -16,6 +20,7 @@ class CartItem {
     required this.price,
     this.unitPrice,
     this.promoType,
+    this.status = CartItemStatus.ok,
     this.quantity = 1,
   });
 }
@@ -38,6 +43,7 @@ class CartNotifier extends Notifier<List<CartItem>> {
           price: curr.price,
           unitPrice: curr.unitPrice,
           promoType: curr.promoType,
+          status: curr.status,
           quantity: curr.quantity + 1,
         ),
         ...state.sublist(idx + 1),
@@ -53,6 +59,43 @@ class CartNotifier extends Notifier<List<CartItem>> {
 
   void clear() {
     state = [];
+  }
+
+  // Aggiorna i prezzi di tutti i prodotti in base al nuovo supermercato selezionato
+  Future<void> refreshPrices(String storeId, WidgetRef ref) async {
+    final historyNotifier = ref.read(priceHistoryProvider);
+    
+    List<CartItem> newList = [];
+    for (var item in state) {
+      final history = await historyNotifier.getHistoryForProduct(item.barcode);
+      final storeHistory = history.where((h) => h.storeId == storeId).firstOrNull;
+      
+      CartItemStatus status = CartItemStatus.ok;
+      double newPrice = 0.0;
+      String? promo;
+
+      if (storeHistory == null) {
+        status = CartItemStatus.error; // Prodotto mai visto in questo negozio
+      } else {
+        newPrice = storeHistory.price;
+        promo = storeHistory.promoType;
+        if (newPrice <= 0) {
+          status = CartItemStatus.warning; // Prezzo mancante o nullo
+        }
+      }
+
+      newList.add(CartItem(
+        id: item.id,
+        barcode: item.barcode,
+        name: item.name,
+        price: newPrice,
+        unitPrice: item.unitPrice,
+        promoType: promo,
+        status: status,
+        quantity: item.quantity,
+      ));
+    }
+    state = newList;
   }
 }
 
