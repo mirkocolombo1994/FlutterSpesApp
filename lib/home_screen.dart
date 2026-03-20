@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:task_master_app/tasks_list.dart';
 import 'package:task_master_app/spes_app_screen.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
@@ -8,9 +9,7 @@ class HomeScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Scegli Funzione'),
-      ),
+      appBar: AppBar(title: const Text('Scegli Funzione')),
       body: ListView(
         padding: const EdgeInsets.all(16.0),
         children: [
@@ -18,7 +17,11 @@ class HomeScreen extends StatelessWidget {
             elevation: 4,
             child: ListTile(
               contentPadding: const EdgeInsets.all(16.0),
-              leading: const Icon(Icons.list_alt, size: 40, color: Colors.indigo),
+              leading: const Icon(
+                Icons.list_alt,
+                size: 40,
+                color: Colors.indigo,
+              ),
               title: const Text(
                 'Lista Task',
                 style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
@@ -37,7 +40,11 @@ class HomeScreen extends StatelessWidget {
             elevation: 4,
             child: ListTile(
               contentPadding: const EdgeInsets.all(16.0),
-              leading: const Icon(Icons.shopping_cart, size: 40, color: Colors.indigo),
+              leading: const Icon(
+                Icons.shopping_cart,
+                size: 40,
+                color: Colors.indigo,
+              ),
               title: const Text(
                 'SpesApp',
                 style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
@@ -46,13 +53,36 @@ class HomeScreen extends StatelessWidget {
               onTap: () {
                 Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (context) => const SpesAppScreen()),
+                  MaterialPageRoute(
+                    builder: (context) => const SpesAppScreen(),
+                  ),
                 );
               },
             ),
           ),
         ],
       ),
+      persistentFooterButtons: [
+        Container(
+          width: double.infinity, // Prende tutta la larghezza
+          child: _buildVersionText(),
+        ),
+      ],
+    );
+  }
+
+  FutureBuilder<PackageInfo> _buildVersionText() {
+    return FutureBuilder<PackageInfo>(
+      future: PackageInfo.fromPlatform(),
+      builder: (context, snapshot) {
+        if (snapshot.hasData) {
+          return Text(
+            'Versione: ${snapshot.data!.version}+${snapshot.data!.buildNumber}',
+          );
+        } else {
+          return CircularProgressIndicator();
+        }
+      },
     );
   }
 }
