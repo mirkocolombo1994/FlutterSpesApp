@@ -4,6 +4,7 @@ import 'dart:io';
 import '../providers/product_provider.dart';
 import 'add_product_screen.dart';
 import 'product_detail_screen.dart';
+import '../constants/app_strings.dart';
 
 class ProductsScreen extends ConsumerWidget {
   const ProductsScreen({super.key});
@@ -14,10 +15,10 @@ class ProductsScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Prodotti'),
+        title: const Text(AppStrings.navProdotti),
       ),
       body: products.isEmpty
-          ? const Center(child: Text('Nessun prodotto trovato.'))
+          ? const Center(child: Text(AppStrings.noProductsFound))
           : ListView.builder(
               itemCount: products.length,
               itemBuilder: (context, index) {

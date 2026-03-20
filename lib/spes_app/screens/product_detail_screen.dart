@@ -9,6 +9,7 @@ import '../providers/product_provider.dart';
 import '../providers/price_history_provider.dart';
 import '../providers/store_provider.dart';
 import '../providers/category_provider.dart';
+import '../constants/app_strings.dart';
 
 /// Schermata di dettaglio di un singolo prodotto.
 /// Mostra informazioni tecniche, immagine, e storico prezzi per negozio.
@@ -83,7 +84,7 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
         _isEditing = false; // Torna in modalità visualizzazione
       });
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Prodotto aggiornato con successo')),
+        const SnackBar(content: Text(AppStrings.saveSuccess)),
       );
     }
   }
@@ -111,7 +112,7 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: _isEditing ? const Text('Modifica Prodotto') : Text(product.name),
+        title: _isEditing ? const Text(AppStrings.editProduct) : Text(product.name),
         elevation: 0,
         actions: [
           if (!_isEditing)
@@ -163,7 +164,7 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
                   
                   if (product.description != null && product.description!.isNotEmpty) ...[
                     const SizedBox(height: 24),
-                    _buildSectionHeader('Descrizione'),
+                    _buildSectionHeader(AppStrings.descriptionLabel),
                     const SizedBox(height: 8),
                     Text(
                       product.description!,
@@ -212,26 +213,26 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
         children: [
           TextField(
             controller: _nameController,
-            decoration: const InputDecoration(labelText: 'Nome Prodotto', border: OutlineInputBorder()),
+            decoration: const InputDecoration(labelText: AppStrings.nameLabel, border: OutlineInputBorder()),
           ),
           const SizedBox(height: 12),
           DropdownButtonFormField<String>(
             value: categories.any((c) => c.name == _categoryController.text) 
                 ? _categoryController.text 
                 : null,
-            decoration: const InputDecoration(labelText: 'Categoria', border: OutlineInputBorder()),
+            decoration: const InputDecoration(labelText: AppStrings.categoryLabel, border: OutlineInputBorder()),
             items: categories.map((c) {
               return DropdownMenuItem(value: c.name, child: Text(c.name));
             }).toList(),
             onChanged: (val) {
               if (val != null) _categoryController.text = val;
             },
-            hint: const Text('Seleziona categoria'),
+            hint: const Text(AppStrings.selectCategoryHint),
           ),
           const SizedBox(height: 12),
           TextField(
             controller: _brandController,
-            decoration: const InputDecoration(labelText: 'Marca', border: OutlineInputBorder()),
+            decoration: const InputDecoration(labelText: AppStrings.brandLabel, border: OutlineInputBorder()),
           ),
         ],
       );
@@ -276,12 +277,12 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _buildSectionHeader('Dettagli Tecnici'),
-        _buildInfoRow(Icons.qr_code_scanner, 'Barcode', product.barcode),
+        _buildSectionHeader(AppStrings.technicalDetails),
+        _buildInfoRow(Icons.qr_code_scanner, AppStrings.barcodeLabel, product.barcode),
         if (product.weight != null)
           _buildInfoRow(
             Icons.scale,
-            'Formato',
+            AppStrings.weightLabel,
             '${product.weight} ${product.weightUnit ?? ""}',
           ),
       ],
@@ -292,12 +293,12 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _buildSectionHeader('Ultimi Prezzi Rilevati'),
+        _buildSectionHeader(AppStrings.latestPrices),
         const SizedBox(height: 8),
         if (_isLoadingHistory)
           const Center(child: CircularProgressIndicator())
         else if (latestPrices.isEmpty)
-          const Text('Nessuna rilevazione prezzo disponibile.')
+          const Text(AppStrings.noPricesAvailable)
         else
           Container(
             decoration: BoxDecoration(
@@ -314,9 +315,9 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
                 TableRow(
                   decoration: BoxDecoration(color: Colors.blueGrey.shade50),
                   children: [
-                    _buildTableCell('Supermercato', isHeader: true),
-                    _buildTableCell('Prezzo', isHeader: true),
-                    _buildTableCell('Data', isHeader: true),
+                    _buildTableCell(AppStrings.supermarket, isHeader: true),
+                    _buildTableCell(AppStrings.price, isHeader: true),
+                    _buildTableCell(AppStrings.date, isHeader: true),
                   ],
                 ),
                 ...latestPrices.entries.map((entry) {
@@ -327,7 +328,7 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
                   
                   return TableRow(
                     children: [
-                      _buildTableCell(store?.name ?? 'Sconosciuto'),
+                      _buildTableCell(store?.name ?? AppStrings.unknown),
                       _buildTableCell('${history.price.toStringAsFixed(2)} €'),
                       _buildTableCell(DateFormat('dd/MM/yyyy').format(date)),
                     ],

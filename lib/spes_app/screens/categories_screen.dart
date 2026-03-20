@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 import '../models/category.dart';
 import '../providers/category_provider.dart';
+import '../constants/app_strings.dart';
 
 /// Schermata per la gestione delle categorie dei prodotti.
 /// Permette di visualizzare, aggiungere ed eliminare categorie.
@@ -42,20 +43,20 @@ class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Nuova Categoria'),
+        title: const Text(AppStrings.newCategory),
         content: TextField(
           controller: _textFieldController,
-          decoration: const InputDecoration(hintText: "Nome categoria"),
+          decoration: const InputDecoration(hintText: AppStrings.categoryNameHint),
           autofocus: true,
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Annulla'),
+            child: const Text(AppStrings.cancel),
           ),
           ElevatedButton(
             onPressed: _addCategory,
-            child: const Text('Aggiungi'),
+            child: const Text(AppStrings.add),
           ),
         ],
       ),
@@ -69,10 +70,10 @@ class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Gestione Categorie'),
+        title: const Text(AppStrings.manageCategories),
       ),
       body: categories.isEmpty
-          ? const Center(child: Text('Nessuna categoria definita.'))
+          ? const Center(child: Text(AppStrings.noCategoriesDefined))
           : ListView.builder(
               itemCount: categories.length,
               itemBuilder: (context, index) {
@@ -91,7 +92,7 @@ class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
             ),
       floatingActionButton: FloatingActionButton(
         onPressed: _showAddDialog,
-        tooltip: 'Aggiungi Categoria',
+        tooltip: AppStrings.addCategoryTooltip,
         child: const Icon(Icons.add),
       ),
     );

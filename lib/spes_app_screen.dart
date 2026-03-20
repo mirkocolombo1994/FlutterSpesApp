@@ -5,6 +5,7 @@ import 'spes_app/screens/stores_screen.dart';
 import 'spes_app/screens/price_history_screen.dart';
 import 'spes_app/screens/current_shopping_screen.dart';
 import 'spes_app/screens/categories_screen.dart';
+import 'spes_app/constants/app_strings.dart';
 
 /// Schermata principale dell'applicazione SpesApp.
 /// Gestisce la navigazione tramite BottomNavigationBar per le sezioni principali
@@ -30,7 +31,7 @@ class _SpesAppScreenState extends State<SpesAppScreen> {
     return Scaffold(
       // AppBar che mostra il titolo in base alla pagina selezionata
       appBar: AppBar(
-        title: Text(_currentIndex == 0 ? 'Spesa in Corso' : 'Liste Spesa'),
+        title: Text(_currentIndex == 0 ? AppStrings.currentShopping : AppStrings.shoppingLists),
       ),
       // Menu laterale a scomparsa per le opzioni di gestione
       drawer: Drawer(
@@ -47,7 +48,7 @@ class _SpesAppScreenState extends State<SpesAppScreen> {
                     Icon(Icons.shopping_basket, size: 50, color: Colors.indigo),
                     SizedBox(height: 10),
                     Text(
-                      'SpesApp Menu',
+                      AppStrings.drawerMenuTitle,
                       style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.indigo),
                     ),
                   ],
@@ -56,22 +57,22 @@ class _SpesAppScreenState extends State<SpesAppScreen> {
             ),
             _buildDrawerItem(
               icon: Icons.inventory_2,
-              title: 'Prodotti',
+              title: AppStrings.navProdotti,
               onTap: () => _navigateTo(const ProductsScreen()),
             ),
             _buildDrawerItem(
               icon: Icons.storefront,
-              title: 'Punti Vendita',
+              title: AppStrings.navPuntiVendita,
               onTap: () => _navigateTo(const StoresScreen()),
             ),
             _buildDrawerItem(
               icon: Icons.history,
-              title: 'Storico Prezzi',
+              title: AppStrings.navStorico,
               onTap: () => _navigateTo(const PriceHistoryScreen()),
             ),
             _buildDrawerItem(
               icon: Icons.category,
-              title: 'Categorie',
+              title: AppStrings.navCategorie,
               onTap: () => _navigateTo(const CategoriesScreen()),
             ),
           ],
@@ -92,11 +93,11 @@ class _SpesAppScreenState extends State<SpesAppScreen> {
         items: const [
           BottomNavigationBarItem(
             icon: Icon(Icons.shopping_cart),
-            label: 'Cassa',
+            label: AppStrings.navCassa,
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.receipt_long),
-            label: 'Liste',
+            label: AppStrings.navListe,
           ),
         ],
       ),

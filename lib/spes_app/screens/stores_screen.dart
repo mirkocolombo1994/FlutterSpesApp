@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/store_provider.dart';
 import 'add_store_screen.dart';
+import '../constants/app_strings.dart';
 
 class StoresScreen extends ConsumerWidget {
   const StoresScreen({super.key});
@@ -22,10 +23,10 @@ class StoresScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Supermercati'),
+        title: const Text(AppStrings.navSupermercati),
       ),
       body: stores.isEmpty
-          ? const Center(child: Text('Nessun supermercato salvato. Aggiungine uno!'))
+          ? const Center(child: Text(AppStrings.noStoresSaved))
           : ListView.builder(
               itemCount: stores.length,
               itemBuilder: (context, index) {
@@ -43,7 +44,7 @@ class StoresScreen extends ConsumerWidget {
                       ? const Icon(Icons.new_releases, color: Colors.green, size: 40)
                       : Icon(Icons.storefront, color: store.isClosed ? Colors.grey : Colors.indigo, size: 40),
                     title: Text(
-                      isNew ? '${store.name} (NUOVO!)' : store.name, 
+                      isNew ? '${store.name} (${AppStrings.newStoreIndicator})' : store.name, 
                       style: TextStyle(
                         fontWeight: FontWeight.bold,
                         color: isNew ? Colors.green.shade800 : null,
@@ -54,13 +55,13 @@ class StoresScreen extends ConsumerWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         if (store.isClosed)
-                          const Text('CHIUSO DEFINITIVAMENTE', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+                          const Text(AppStrings.storeClosedDefinitively, style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
                         if (store.chain != null && store.chain!.isNotEmpty) 
-                          Text('Catena: ${store.chain}'),
+                          Text('${AppStrings.storeChainPrefix} ${store.chain}'),
                         if (store.phone != null && store.phone!.isNotEmpty) 
-                          Text('Tel: ${store.phone}'),
+                          Text('${AppStrings.storePhonePrefix} ${store.phone}'),
                         if (store.latitude != null && store.longitude != null)
-                          const Text('Posizione salvata sulla mappa', style: TextStyle(color: Colors.green, fontSize: 12)),
+                          const Text(AppStrings.locationSavedOnMap, style: TextStyle(color: Colors.green, fontSize: 12)),
                       ],
                     ),
                     trailing: const Icon(Icons.edit, color: Colors.grey),

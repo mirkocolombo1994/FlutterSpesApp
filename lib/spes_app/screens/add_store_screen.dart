@@ -8,6 +8,7 @@ import '../providers/store_provider.dart';
 import '../providers/price_history_provider.dart';
 import '../providers/product_provider.dart';
 import '../services/spes_app_database_helper.dart';
+import '../constants/app_strings.dart';
 
 class AddStoreScreen extends ConsumerStatefulWidget {
   final Store? storeToEdit;
@@ -83,17 +84,17 @@ class _AddStoreScreenState extends ConsumerState<AddStoreScreen> {
         return StatefulBuilder(
           builder: (context, setDialogState) {
             return AlertDialog(
-              title: Text(isDelete ? 'Elimina Punto Vendita' : (_isClosed ? 'Riapri Punto Vendita' : 'Chiudi Punto Vendita')),
+              title: Text(isDelete ? AppStrings.deleteStoreTitle : (_isClosed ? AppStrings.reopenStoreTitle : AppStrings.closeStoreTitle)),
               content: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                    Text(isDelete 
-                     ? 'Sei sicuro di voler eliminare DEFINITIVAMENTE questo punto vendita?' 
-                     : (_isClosed ? 'Vuoi riaprire questo punto vendita?' : 'Vuoi contrassegnare questo punto vendita come chiuso definitivamente?')),
+                     ? AppStrings.deleteStoreConfirm 
+                     : (_isClosed ? AppStrings.reopenStoreConfirm : AppStrings.closeStoreConfirm)),
                    if (isDelete || !_isClosed) ...[
                      const SizedBox(height: 16),
                      CheckboxListTile(
-                       title: const Text('Elimina anche i prezzi e i prodotti esclusivi di questo supermercato', style: TextStyle(fontSize: 14)),
+                       title: const Text(AppStrings.deleteRelatedData, style: TextStyle(fontSize: 14)),
                        value: deleteExclusive,
                        onChanged: (val) {
                          setDialogState(() {
@@ -109,14 +110,14 @@ class _AddStoreScreenState extends ConsumerState<AddStoreScreen> {
               actions: [
                 TextButton(
                   onPressed: () => Navigator.pop(ctx, null),
-                  child: const Text('Annulla'),
+                  child: const Text(AppStrings.cancel),
                 ),
                 ElevatedButton(
                   style: ElevatedButton.styleFrom(
                     backgroundColor: isDelete ? Colors.red : Colors.orange,
                   ),
                   onPressed: () => Navigator.pop(ctx, deleteExclusive),
-                  child: const Text('Conferma', style: TextStyle(color: Colors.white)),
+                  child: const Text(AppStrings.confirmAction, style: TextStyle(color: Colors.white)),
                 ),
               ],
             );
@@ -166,12 +167,12 @@ class _AddStoreScreenState extends ConsumerState<AddStoreScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(isEditing ? 'Modifica Supermercato' : 'Nuovo Supermercato'),
+        title: Text(isEditing ? AppStrings.editStore : AppStrings.newStore),
         actions: [
           IconButton(
             icon: const Icon(Icons.save),
             onPressed: _saveStore,
-            tooltip: 'Salva',
+            tooltip: AppStrings.save,
           )
         ],
       ),
@@ -188,34 +189,34 @@ class _AddStoreScreenState extends ConsumerState<AddStoreScreen> {
                    children: [
                      Icon(Icons.warning, color: Colors.red),
                      SizedBox(width: 8),
-                     Expanded(child: Text('Questo punto vendita è CHIUSO.', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold))),
+                     Expanded(child: Text(AppStrings.storeClosedWarning, style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold))),
                    ],
                  )
                ),
             const SizedBox(height: 16),
             TextFormField(
               controller: _nameCtrl,
-              decoration: const InputDecoration(labelText: 'Nome Supermercato *', border: OutlineInputBorder()),
-              validator: (value) => value == null || value.isEmpty ? 'Inserisci un nome' : null,
+              decoration: const InputDecoration(labelText: AppStrings.storeNameRequired, border: OutlineInputBorder()),
+              validator: (value) => value == null || value.isEmpty ? AppStrings.enterStoreName : null,
               onSaved: (value) => _name = value!,
             ),
             const SizedBox(height: 16),
             TextFormField(
               controller: _chainCtrl,
-              decoration: const InputDecoration(labelText: 'Catena (es. Esselunga, Conad)', border: OutlineInputBorder()),
+              decoration: const InputDecoration(labelText: AppStrings.storeChainLabel, border: OutlineInputBorder()),
               onSaved: (value) => _chain = value ?? '',
             ),
             const SizedBox(height: 16),
             TextFormField(
               controller: _phoneCtrl,
-              decoration: const InputDecoration(labelText: 'Telefono', border: OutlineInputBorder()),
+              decoration: const InputDecoration(labelText: AppStrings.phoneLabel, border: OutlineInputBorder()),
               keyboardType: TextInputType.phone,
               onSaved: (value) => _phone = value ?? '',
             ),
             const SizedBox(height: 16),
             ElevatedButton.icon(
               icon: const Icon(Icons.map),
-              label: const Text('Seleziona Posizione sulla Mappa'),
+              label: const Text(AppStrings.selectLocationOnMap),
               onPressed: () async {
                 final result = await Navigator.push(context, MaterialPageRoute(builder: (context) => const MapPickerScreen()));
                 if (result != null && result is Map<String, dynamic>) {
@@ -235,7 +236,7 @@ class _AddStoreScreenState extends ConsumerState<AddStoreScreen> {
             if (_latitude != null && _longitude != null)
               Padding(
                 padding: const EdgeInsets.only(top: 8.0, bottom: 16),
-                child: Text('Coordinate: ${_latitude!.toStringAsFixed(4)}, ${_longitude!.toStringAsFixed(4)}', 
+                child: Text('${AppStrings.coordinatesPrefix} ${_latitude!.toStringAsFixed(4)}, ${_longitude!.toStringAsFixed(4)}', 
                   style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold)),
               ),
             
@@ -244,14 +245,14 @@ class _AddStoreScreenState extends ConsumerState<AddStoreScreen> {
               ElevatedButton.icon(
                 style: ElevatedButton.styleFrom(backgroundColor: _isClosed ? Colors.green : Colors.orange),
                 icon: Icon(_isClosed ? Icons.lock_open : Icons.lock, color: Colors.white),
-                label: Text(_isClosed ? 'Riapri Punto Vendita' : 'Segna come Chiuso', style: const TextStyle(color: Colors.white)),
+                label: Text(_isClosed ? AppStrings.reopenStoreTitle : AppStrings.markAsClosed, style: const TextStyle(color: Colors.white)),
                 onPressed: () { _formKey.currentState!.save(); _showDeleteOrCloseDialog(false); },
               ),
               const SizedBox(height: 8),
               OutlinedButton.icon(
                 style: OutlinedButton.styleFrom(foregroundColor: Colors.red, side: const BorderSide(color: Colors.red)),
                 icon: const Icon(Icons.delete),
-                label: const Text('Elimina Definitivamente'),
+                label: const Text(AppStrings.deleteDefinitively),
                 onPressed: () { _formKey.currentState!.save(); _showDeleteOrCloseDialog(true); },
               )
             ]

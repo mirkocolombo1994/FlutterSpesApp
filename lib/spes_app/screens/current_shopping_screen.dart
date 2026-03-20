@@ -12,6 +12,7 @@ import '../services/location_service.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
 import 'dart:io';
+import '../constants/app_strings.dart';
 
 class CurrentShoppingScreen extends ConsumerStatefulWidget {
   const CurrentShoppingScreen({super.key});
@@ -64,7 +65,7 @@ class _CurrentShoppingScreenState extends ConsumerState<CurrentShoppingScreen> {
         ref.read(newlyAddedStoreIdProvider.notifier).setId(newStore.id);
         if (mounted) {
            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-             content: Text('📍 Nuovo supermercato salvato in automatico: $placeName'),
+             content: Text('${AppStrings.newStoreAutoSaved} $placeName'),
              backgroundColor: Colors.green,
            ));
         }
@@ -84,7 +85,7 @@ class _CurrentShoppingScreenState extends ConsumerState<CurrentShoppingScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Spesa in Corso'),
+        title: const Text(AppStrings.currentShoppingTitle),
         actions: [
           if (cartItems.isNotEmpty)
             IconButton(
@@ -92,7 +93,7 @@ class _CurrentShoppingScreenState extends ConsumerState<CurrentShoppingScreen> {
               onPressed: () {
                 ref.read(cartProvider.notifier).clear();
               },
-              tooltip: 'Svuota Carrello',
+              tooltip: AppStrings.clearCartTooltip,
             )
         ],
       ),
@@ -110,9 +111,9 @@ class _CurrentShoppingScreenState extends ConsumerState<CurrentShoppingScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text('Punto Vendita:', style: TextStyle(fontSize: 12, color: Colors.indigo)),
+                      const Text(AppStrings.storeSelectorLabel, style: TextStyle(fontSize: 12, color: Colors.indigo)),
                       Text(
-                        currentStore?.name ?? 'Supermercato non rilevato',
+                        currentStore?.name ?? AppStrings.storeNotDetected,
                         style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                       ),
                     ],
@@ -121,7 +122,7 @@ class _CurrentShoppingScreenState extends ConsumerState<CurrentShoppingScreen> {
                 TextButton.icon(
                   onPressed: () => _showStoreSelector(context, ref, stores),
                   icon: const Icon(Icons.edit_location_alt, size: 18),
-                  label: const Text('Cambia'),
+                  label: const Text(AppStrings.changeStore),
                 ),
               ],
             ),
@@ -131,7 +132,7 @@ class _CurrentShoppingScreenState extends ConsumerState<CurrentShoppingScreen> {
                 ? const Center(child: Padding(
                     padding: EdgeInsets.all(32.0),
                     child: Text(
-                      'Il tuo carrello è vuoto.\nScannerizza i prodotti mentre li metti nel carrello fisico per calcolare il totale in tempo reale!',
+                      AppStrings.emptyCart,
                       textAlign: TextAlign.center,
                       style: TextStyle(fontSize: 16, color: Colors.grey),
                     ),
@@ -172,12 +173,12 @@ class _CurrentShoppingScreenState extends ConsumerState<CurrentShoppingScreen> {
                             Expanded(child: Text(item.name, style: const TextStyle(fontWeight: FontWeight.bold))),
                             if (item.status == CartItemStatus.warning)
                                const Tooltip(
-                                 message: 'Prezzo mancante in questo negozio',
+                                 message: AppStrings.priceMissingInStore,
                                  child: Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 20),
                                ),
                             if (item.status == CartItemStatus.error)
                                const Tooltip(
-                                 message: 'Prodotto non censito in questo negozio',
+                                 message: AppStrings.productNotIndexedInStore,
                                  child: Icon(Icons.error_outline, color: Colors.red, size: 20),
                                ),
                             if (item.promoType != null)
@@ -199,7 +200,7 @@ class _CurrentShoppingScreenState extends ConsumerState<CurrentShoppingScreen> {
                         subtitle: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(isFresh ? 'Fresco - €${item.price.toStringAsFixed(2)}' : '€${item.price.toStringAsFixed(2)} cad.'),
+                            Text(isFresh ? '${AppStrings.freshIndicatorLabel} - €${item.price.toStringAsFixed(2)}' : '€${item.price.toStringAsFixed(2)} ${AppStrings.pricePerUnit}'),
                             if (item.unitPrice != null && item.unitPrice! > 0)
                               Text(
                                 '(${item.unitPrice!.toStringAsFixed(2)} €/unità)',
@@ -224,7 +225,7 @@ class _CurrentShoppingScreenState extends ConsumerState<CurrentShoppingScreen> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text('Totale Cassa:', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+                const Text(AppStrings.totalLabel, style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
                 Text('€${total.toStringAsFixed(2)}', style: const TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: Colors.green)),
               ],
             ),
@@ -235,7 +236,7 @@ class _CurrentShoppingScreenState extends ConsumerState<CurrentShoppingScreen> {
       floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
       floatingActionButton: FloatingActionButton.extended(
         icon: const Icon(Icons.qr_code_scanner, size: 30),
-        label: const Text('Aggiungi Prodotto', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+        label: const Text(AppStrings.addProductLabel, style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
         backgroundColor: Colors.indigo,
         foregroundColor: Colors.white,
         elevation: 6,
@@ -271,7 +272,7 @@ class _CurrentShoppingScreenState extends ConsumerState<CurrentShoppingScreen> {
               finalBarcodeToAdd = scannedCode;
               if (mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                  content: Text('✅ Aggiunto: ${existingProduct.name}'),
+                  content: Text('${AppStrings.addedSuccess} ${existingProduct.name}'),
                   backgroundColor: Colors.green,
                   duration: const Duration(seconds: 2),
                 ));
@@ -310,7 +311,7 @@ class _CurrentShoppingScreenState extends ConsumerState<CurrentShoppingScreen> {
                 CartItem(
                   id: const Uuid().v4(),
                   barcode: finalBarcodeToAdd,
-                  name: product?.name ?? 'Prodotto sconosciuto',
+                  name: product?.name ?? AppStrings.unknownProduct,
                   price: price,
                   unitPrice: product?.pricePerKg,
                   promoType: latestHistory?.promoType,

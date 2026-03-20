@@ -5,6 +5,7 @@ import '../models/shopping_list.dart';
 import '../providers/shopping_list_provider.dart';
 import '../providers/store_provider.dart';
 import 'shopping_list_detail_screen.dart';
+import '../constants/app_strings.dart';
 
 class ShoppingListsScreen extends ConsumerWidget {
   const ShoppingListsScreen({super.key});
@@ -21,19 +22,19 @@ class ShoppingListsScreen extends ConsumerWidget {
           final stores = ref.read(storeProvider);
           
           return AlertDialog(
-            title: const Text('Nuova Lista'),
+            title: const Text(AppStrings.newListLabel),
             content: SingleChildScrollView(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                    TextField(
                     controller: nameController,
-                    decoration: const InputDecoration(labelText: 'Nome Lista'),
+                    decoration: const InputDecoration(labelText: AppStrings.listNameLabel),
                   ),
                   const SizedBox(height: 16),
                   DropdownButtonFormField<ShoppingListType>(
                     value: selectedType,
-                    decoration: const InputDecoration(labelText: 'Tipo Lista'),
+                    decoration: const InputDecoration(labelText: AppStrings.listTypeLabel),
                     items: ShoppingListType.values.map((t) => DropdownMenuItem(
                       value: t,
                       child: Text(t.name.toUpperCase()),
@@ -48,7 +49,7 @@ class ShoppingListsScreen extends ConsumerWidget {
                   if (selectedType == ShoppingListType.classic)
                     DropdownButtonFormField<String>(
                       value: selectedStoreId,
-                      decoration: const InputDecoration(labelText: 'Seleziona Supermercato'),
+                      decoration: const InputDecoration(labelText: AppStrings.selectStore),
                       items: stores.map((s) => DropdownMenuItem(
                         value: s.id,
                         child: Text(s.name),
@@ -65,13 +66,13 @@ class ShoppingListsScreen extends ConsumerWidget {
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(ctx),
-                child: const Text('Annulla'),
+                child: const Text(AppStrings.cancel),
               ),
               ElevatedButton(
                 onPressed: () {
                   if (nameController.text.isEmpty) return;
                   if (selectedType == ShoppingListType.classic && selectedStoreId == null) {
-                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Scegli un supermercato per la lista classica')));
+                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text(AppStrings.selectStoreForList)));
                     return;
                   }
                   
@@ -85,7 +86,7 @@ class ShoppingListsScreen extends ConsumerWidget {
                   ref.read(shoppingListProvider.notifier).addList(newList);
                   Navigator.pop(ctx);
                 },
-                child: const Text('Crea'),
+                child: const Text(AppStrings.create),
               ),
             ],
           );
@@ -100,10 +101,10 @@ class ShoppingListsScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Le mie Liste Spesa'),
+        title: const Text(AppStrings.shoppingListsTitle),
       ),
       body: lists.isEmpty
-          ? const Center(child: Text('Nessuna lista creata.'))
+          ? const Center(child: Text(AppStrings.noListsFound))
           : ListView.builder(
               itemCount: lists.length,
               itemBuilder: (context, index) {
@@ -123,7 +124,7 @@ class ShoppingListsScreen extends ConsumerWidget {
                         size: 40,
                       ),
                       title: Text(list.name, style: const TextStyle(fontWeight: FontWeight.bold)),
-                      subtitle: Text('Tipo: ${list.type.name.toUpperCase()}'),
+                      subtitle: Text('${AppStrings.listTypePrefix} ${list.type.name.toUpperCase()}'),
                       trailing: const Icon(Icons.chevron_right),
                       onTap: () {
                         Navigator.push(

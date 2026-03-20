@@ -5,6 +5,7 @@ import '../models/price_history.dart';
 import '../providers/product_provider.dart';
 import '../providers/store_provider.dart';
 import '../providers/price_history_provider.dart';
+import '../constants/app_strings.dart';
 
 class PriceHistoryScreen extends ConsumerStatefulWidget {
   const PriceHistoryScreen({super.key});
@@ -27,7 +28,7 @@ class _PriceHistoryScreenState extends ConsumerState<PriceHistoryScreen> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           DropdownButtonFormField<String>(
-            decoration: const InputDecoration(labelText: 'Seleziona Prodotto', border: OutlineInputBorder()),
+            decoration: const InputDecoration(labelText: AppStrings.selectProduct, border: OutlineInputBorder()),
             value: _selectedProductBarcode,
             items: products.map((p) => DropdownMenuItem(value: p.barcode, child: Text(p.name))).toList(),
             onChanged: (val) {
@@ -44,21 +45,21 @@ class _PriceHistoryScreenState extends ConsumerState<PriceHistoryScreen> {
                 builder: (context, snapshot) {
                   if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
                   final history = snapshot.data!;
-                  if (history.isEmpty) return const Center(child: Text('Nessuno storico prezzi trovato.'));
+                  if (history.isEmpty) return const Center(child: Text(AppStrings.priceHistoryNotFound));
 
                   return SingleChildScrollView(
                     scrollDirection: Axis.horizontal,
                     child: SingleChildScrollView(
                       child: DataTable(
                         columns: const [
-                          DataColumn(label: Text('Data', style: TextStyle(fontWeight: FontWeight.bold))),
-                          DataColumn(label: Text('Supermercato', style: TextStyle(fontWeight: FontWeight.bold))),
-                          DataColumn(label: Text('Prezzo', style: TextStyle(fontWeight: FontWeight.bold))),
+                          DataColumn(label: Text(AppStrings.date, style: TextStyle(fontWeight: FontWeight.bold))),
+                          DataColumn(label: Text(AppStrings.supermarket, style: TextStyle(fontWeight: FontWeight.bold))),
+                          DataColumn(label: Text(AppStrings.price, style: TextStyle(fontWeight: FontWeight.bold))),
                         ],
                         rows: history.map((h) {
                           final date = DateTime.fromMillisecondsSinceEpoch(h.timestamp);
                           final store = stores.where((s) => s.id == h.storeId).firstOrNull;
-                          final storeName = store?.name ?? 'Ignoto';
+                          final storeName = store?.name ?? AppStrings.unknownEntity;
                           return DataRow(cells: [
                             DataCell(Text(DateFormat('dd/MM/yyyy HH:mm').format(date))),
                             DataCell(Text(storeName)),
@@ -86,7 +87,7 @@ class _PriceHistoryScreenState extends ConsumerState<PriceHistoryScreen> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           DropdownButtonFormField<String>(
-            decoration: const InputDecoration(labelText: 'Seleziona Supermercato', border: OutlineInputBorder()),
+            decoration: const InputDecoration(labelText: AppStrings.selectStore, border: OutlineInputBorder()),
             value: _selectedStoreId,
             items: stores.map((s) => DropdownMenuItem(value: s.id, child: Text(s.name))).toList(),
             onChanged: (val) {
@@ -103,21 +104,21 @@ class _PriceHistoryScreenState extends ConsumerState<PriceHistoryScreen> {
                 builder: (context, snapshot) {
                   if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
                   final history = snapshot.data!;
-                  if (history.isEmpty) return const Center(child: Text('Nessuno storico prezzi trovato.'));
+                  if (history.isEmpty) return const Center(child: Text(AppStrings.priceHistoryNotFound));
 
                   return SingleChildScrollView(
                     scrollDirection: Axis.horizontal,
                     child: SingleChildScrollView(
                       child: DataTable(
                         columns: const [
-                          DataColumn(label: Text('Data', style: TextStyle(fontWeight: FontWeight.bold))),
-                          DataColumn(label: Text('Prodotto', style: TextStyle(fontWeight: FontWeight.bold))),
-                          DataColumn(label: Text('Prezzo', style: TextStyle(fontWeight: FontWeight.bold))),
+                          DataColumn(label: Text(AppStrings.date, style: TextStyle(fontWeight: FontWeight.bold))),
+                          DataColumn(label: Text(AppStrings.productLabel, style: TextStyle(fontWeight: FontWeight.bold))),
+                          DataColumn(label: Text(AppStrings.price, style: TextStyle(fontWeight: FontWeight.bold))),
                         ],
                         rows: history.map((h) {
                           final date = DateTime.fromMillisecondsSinceEpoch(h.timestamp);
                           final product = products.where((p) => p.barcode == h.productBarcode).firstOrNull;
-                          final productName = product?.name ?? 'Ignoto';
+                          final productName = product?.name ?? AppStrings.unknownEntity;
                           return DataRow(cells: [
                             DataCell(Text(DateFormat('dd/MM/yyyy HH:mm').format(date))),
                             DataCell(Text(productName)),
@@ -141,11 +142,11 @@ class _PriceHistoryScreenState extends ConsumerState<PriceHistoryScreen> {
       length: 2,
       child: Scaffold(
         appBar: AppBar(
-          title: const Text('Storico Prezzi'),
+          title: const Text(AppStrings.priceHistoryTitle),
           bottom: const TabBar(
             tabs: [
-              Tab(text: 'Per Prodotto', icon: Icon(Icons.inventory_2)),
-              Tab(text: 'Per Punto Vendita', icon: Icon(Icons.storefront)),
+              Tab(text: AppStrings.tabByProduct, icon: Icon(Icons.inventory_2)),
+              Tab(text: AppStrings.tabByStore, icon: Icon(Icons.storefront)),
             ],
           ),
         ),

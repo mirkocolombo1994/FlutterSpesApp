@@ -14,6 +14,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
 import 'dart:io';
 import 'package:path/path.dart' as p;
+import '../constants/app_strings.dart';
 
 /// Schermata per l'aggiunta o la modifica di un prodotto.
 /// Include la scansione del codice a barre, il calcolo del prezzo al Kg,
@@ -41,11 +42,18 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
   final _discountPercentController = TextEditingController();
 
   String _description = '';
-  String? _weightUnit = 'kg'; // Unità di misura predefinita
+  String? _weightUnit = AppStrings.unitKg; // Unità di misura predefinita
   String? _selectedStoreId;
-  String? _promoType = 'Nessuna';
+  String? _promoType = AppStrings.promoNone;
   DateTime? _promoValidUntil;
-  final List<String> _promoTypes = ['Nessuna', 'Sconto %', 'Prezzo Tagliato', '1+1', '3x2', 'Altro'];
+  final List<String> _promoTypes = [
+    AppStrings.promoNone,
+    AppStrings.promoDiscountPercent,
+    AppStrings.promoCutPrice,
+    AppStrings.promo1plus1,
+    AppStrings.promo3x2,
+    AppStrings.promoOther
+  ];
 
   File? _imageFile;
   String? _selectedCategory;
@@ -90,13 +98,13 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
     if (price != null && weight != null && weight > 0) {
       double calculatedPrice = 0.0;
       switch (_weightUnit) {
-        case 'g':
-        case 'ml':
+        case AppStrings.unitG:
+        case AppStrings.unitMl:
           calculatedPrice = price / (weight / 1000); // Converte in Kg/L
           break;
-        case 'kg':
-        case 'l':
-        case 'pz':
+        case AppStrings.unitKg:
+        case AppStrings.unitL:
+        case AppStrings.unitPz:
           calculatedPrice = price / weight;
           break;
       }
@@ -148,7 +156,7 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
       _nameController.text = existingProduct.name;
       _brandController.text = existingProduct.brand ?? '';
       _description = existingProduct.description ?? '';
-      _weightUnit = existingProduct.weightUnit ?? 'kg';
+      _weightUnit = existingProduct.weightUnit ?? AppStrings.unitKg;
       _selectedCategory = existingProduct.category;
 
       if (existingProduct.imageUrl != null) {
@@ -160,8 +168,8 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(isFresh 
-                ? '🏷️ Fresco riconosciuto: ${existingProduct.name}. Supermercato auto-impostato!' 
-                : '📦 Prodotto in archivio: ${existingProduct.name}. Supermercato auto-impostato!'),
+                ? '${AppStrings.freshProductDetected}${existingProduct.name}${AppStrings.autoSetStore}' 
+                : '${AppStrings.productInArchive}${existingProduct.name}${AppStrings.autoSetStore}'),
             backgroundColor: Colors.green,
             duration: const Duration(seconds: 4),
           ),
@@ -175,7 +183,7 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
         }
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('🏷️ Nuovo prodotto fresco! Memorizzalo. Prezzo estratto!'),
+            content: Text(AppStrings.newFreshProductAlert),
             backgroundColor: Colors.indigo,
             duration: Duration(seconds: 4),
           ),
@@ -222,7 +230,7 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
 
       if (_selectedStoreId == null || _priceController.text.isEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Seleziona il punto vendita in cui ti trovi e il prezzo!')),
+          const SnackBar(content: Text(AppStrings.selectStoreAndPriceWarning)),
         );
         return;
       }
@@ -256,8 +264,8 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
 
       // Salva record dello storico prezzi
       int? expirationTimestamp = _promoValidUntil?.millisecondsSinceEpoch;
-      String? cleanPromoType = _promoType == 'Nessuna' ? null : _promoType;
-      if (cleanPromoType == 'Sconto %' && _discountPercentController.text.isNotEmpty) {
+      String? cleanPromoType = _promoType == AppStrings.promoNone ? null : _promoType;
+      if (cleanPromoType == AppStrings.promoDiscountPercent && _discountPercentController.text.isNotEmpty) {
         cleanPromoType = 'Sconto ${_discountPercentController.text}%';
       }
 
@@ -282,7 +290,7 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Nuovo Prodotto'),
+        title: const Text(AppStrings.newProduct),
         actions: [
           IconButton(
             icon: const Icon(Icons.save),
@@ -301,14 +309,15 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
                   child: TextFormField(
                     controller: _barcodeController,
                     decoration: const InputDecoration(
-                      labelText: 'Codice a Barre (Opzionale)',
+                      labelText: AppStrings.barcodeOptional,
                       border: OutlineInputBorder(),
-                      helperText: 'Lascia vuoto per inserimento manuale',
+                      helperText: AppStrings.barcodeManualHelper,
                     ),
                   ),
                 ),
                 IconButton(
                   icon: const Icon(Icons.qr_code_scanner, size: 40),
+                  tooltip: AppStrings.scanBarcodeTooltip,
                   onPressed: () async {
                     final String? scannedCode = await Navigator.push(
                       context,
@@ -372,10 +381,10 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
             TextFormField(
               controller: _nameController,
               decoration: const InputDecoration(
-                labelText: 'Nome *',
+                labelText: AppStrings.productNameRequired,
                 border: OutlineInputBorder(),
               ),
-              validator: (value) => value == null || value.isEmpty ? 'Inserisci nome' : null,
+              validator: (value) => value == null || value.isEmpty ? AppStrings.productNameValidator : null,
             ),
             const SizedBox(height: 16),
             // Selezione della Categoria tramite Dropdown sincronizzato
@@ -384,7 +393,7 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
                 final categories = ref.watch(categoryProvider);
                 return DropdownButtonFormField<String>(
                   decoration: const InputDecoration(
-                    labelText: 'Categoria',
+                    labelText: AppStrings.categoryLabel,
                     border: OutlineInputBorder(),
                   ),
                   value: categories.any((c) => c.name == _selectedCategory) ? _selectedCategory : null,
@@ -394,7 +403,7 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
                       _selectedCategory = val;
                     });
                   },
-                  hint: const Text('Seleziona categoria'),
+                  hint: const Text(AppStrings.selectCategoryHint),
                 );
               },
             ),
@@ -402,7 +411,7 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
             TextFormField(
               controller: _brandController,
               decoration: const InputDecoration(
-                labelText: 'Marca',
+                labelText: AppStrings.brandLabel,
                 border: OutlineInputBorder(),
               ),
             ),
@@ -413,7 +422,7 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
                   child: TextFormField(
                     controller: _weightController,
                     decoration: const InputDecoration(
-                      labelText: 'Peso / Quantità',
+                      labelText: AppStrings.weightQuantity,
                       border: OutlineInputBorder(),
                     ),
                     keyboardType: TextInputType.number,
@@ -422,7 +431,13 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
                 const SizedBox(width: 16),
                 DropdownButton<String>(
                   value: _weightUnit,
-                  items: ['kg', 'g', 'l', 'ml', 'pz'].map((String value) {
+                  items: [
+                    AppStrings.unitKg,
+                    AppStrings.unitG,
+                    AppStrings.unitL,
+                    AppStrings.unitMl,
+                    AppStrings.unitPz
+                  ].map((String value) {
                     return DropdownMenuItem<String>(
                       value: value,
                       child: Text(value),
@@ -441,7 +456,7 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
             TextFormField(
               controller: _pricePerKgController,
               decoration: const InputDecoration(
-                labelText: 'Prezzo al Kg/L (€) (Auto)',
+                labelText: AppStrings.pricePerKgAuto,
                 border: OutlineInputBorder(),
               ),
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
@@ -455,7 +470,7 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
                 Expanded(
                   child: DropdownButtonFormField<String>(
                     decoration: const InputDecoration(
-                      labelText: 'In quale punto vendita ti trovi?',
+                      labelText: AppStrings.storeSelectionPrompt,
                       border: OutlineInputBorder(),
                     ),
                     value: stores.any((s) => s.id == _selectedStoreId) ? _selectedStoreId : null,
@@ -471,7 +486,7 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
                   padding: const EdgeInsets.only(left: 8.0, top: 2.0),
                   child: IconButton(
                     icon: const Icon(Icons.add_business, size: 36, color: Colors.indigo),
-                    tooltip: 'Aggiungi nuovo punto vendita',
+                    tooltip: AppStrings.addStoreTooltip,
                     onPressed: () async {
                       final newStoreId = await Navigator.push<String>(
                         context,
@@ -491,13 +506,13 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
             TextFormField(
               controller: _priceController,
               decoration: const InputDecoration(
-                labelText: 'Prezzo rilevato (€) *',
+                labelText: AppStrings.recordedPriceRequired,
                 border: OutlineInputBorder(),
               ),
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
               validator: (value) {
-                if (value == null || value.isEmpty) return 'Inserisci prezzo';
-                if (double.tryParse(value.replaceAll(',', '.')) == null) return 'Prezzo non valido';
+                if (value == null || value.isEmpty) return AppStrings.priceRequiredValidator;
+                if (double.tryParse(value.replaceAll(',', '.')) == null) return AppStrings.priceInvalidValidator;
                 return null;
               },
             ),
@@ -505,7 +520,7 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
             // Gestione Promozioni
             DropdownButtonFormField<String>(
               decoration: const InputDecoration(
-                labelText: 'Promozione',
+                labelText: AppStrings.promotionLabel,
                 border: OutlineInputBorder(),
               ),
               value: _promoType,
@@ -516,24 +531,24 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
                 });
               },
             ),
-            if (_promoType == 'Sconto %') ...[
+            if (_promoType == AppStrings.promoDiscountPercent) ...[
               const SizedBox(height: 16),
               TextFormField(
                 controller: _discountPercentController,
                 decoration: const InputDecoration(
-                  labelText: 'Percentuale Sconto (%)',
+                  labelText: AppStrings.discountPercentLabel,
                   border: OutlineInputBorder(),
                 ),
                 keyboardType: TextInputType.number,
               ),
             ],
-            if (_promoType != null && _promoType != 'Nessuna') ...[
+            if (_promoType != null && _promoType != AppStrings.promoNone) ...[
               const SizedBox(height: 16),
               ListTile(
                 contentPadding: EdgeInsets.zero,
                 title: Text(_promoValidUntil == null 
-                  ? 'Nessuna Scadenza Selezionata' 
-                  : 'Fino al: ${DateFormat('dd/MM/yyyy').format(_promoValidUntil!)}'),
+                  ? AppStrings.noExpirySelected 
+                  : '${AppStrings.expiryDatePrefix} ${DateFormat('dd/MM/yyyy').format(_promoValidUntil!)}'),
                 trailing: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
