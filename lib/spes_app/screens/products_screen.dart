@@ -4,6 +4,7 @@ import 'dart:io';
 import '../providers/product_provider.dart';
 import 'add_product_screen.dart';
 import 'product_detail_screen.dart';
+import 'categories_screen.dart';
 
 class ProductsScreen extends ConsumerWidget {
   const ProductsScreen({super.key});
@@ -15,6 +16,18 @@ class ProductsScreen extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Prodotti'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.category),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const CategoriesScreen()),
+              );
+            },
+            tooltip: 'Gestisci Categorie',
+          ),
+        ],
       ),
       body: products.isEmpty
           ? const Center(child: Text('Nessun prodotto trovato.'))

@@ -5,6 +5,7 @@ import '../models/price_history.dart';
 import '../providers/product_provider.dart';
 import '../providers/store_provider.dart';
 import '../providers/price_history_provider.dart';
+import '../providers/category_provider.dart';
 import 'package:uuid/uuid.dart';
 import 'barcode_scanner_screen.dart';
 import 'add_store_screen.dart';
@@ -44,11 +45,6 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
 
   File? _imageFile;
   String? _selectedCategory;
-  final List<String> _categories = [
-    'Banco fresco', 'Biscotti', 'Caffè', 'Tè/Infusi', 
-    'Frutta/Verdura', 'Salumi', 'Bevande', 'Pasta/Riso', 
-    'Surgelati', 'Pulizia', 'Igiene', 'Altro'
-  ];
 
   final ImagePicker _picker = ImagePicker();
 
@@ -368,17 +364,23 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
               validator: (value) => value == null || value.isEmpty ? 'Inserisci nome' : null,
             ),
             const SizedBox(height: 16),
-            DropdownButtonFormField<String>(
-              decoration: const InputDecoration(
-                labelText: 'Categoria',
-                border: OutlineInputBorder(),
-              ),
-              value: _selectedCategory,
-              items: _categories.map((c) => DropdownMenuItem(value: c, child: Text(c))).toList(),
-              onChanged: (val) {
-                setState(() {
-                  _selectedCategory = val;
-                });
+            Consumer(
+              builder: (context, ref, child) {
+                final categories = ref.watch(categoryProvider);
+                return DropdownButtonFormField<String>(
+                  decoration: const InputDecoration(
+                    labelText: 'Categoria',
+                    border: OutlineInputBorder(),
+                  ),
+                  value: categories.any((c) => c.name == _selectedCategory) ? _selectedCategory : null,
+                  items: categories.map((c) => DropdownMenuItem(value: c.name, child: Text(c.name))).toList(),
+                  onChanged: (val) {
+                    setState(() {
+                      _selectedCategory = val;
+                    });
+                  },
+                  hint: const Text('Seleziona categoria'),
+                );
               },
             ),
             const SizedBox(height: 16),

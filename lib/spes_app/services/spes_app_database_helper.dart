@@ -3,6 +3,7 @@ import 'package:path/path.dart';
 import '../models/store.dart';
 import '../models/product.dart';
 import '../models/price_history.dart';
+import '../models/category.dart';
 import '../models/shopping_list.dart';
 import '../models/shopping_list_item.dart';
 
@@ -24,7 +25,7 @@ class SpesAppDatabaseHelper {
 
     return await openDatabase(
       path,
-      version: 5,
+      version: 6,
       onCreate: _createDB,
       onUpgrade: _upgradeDB,
       onConfigure: (db) async {
@@ -52,6 +53,16 @@ class SpesAppDatabaseHelper {
         await db.execute('ALTER TABLE products ADD COLUMN category TEXT');
       } catch (_) {}
     }
+    if (oldVersion < 6) {
+      try {
+        await db.execute('''
+          CREATE TABLE categories (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL
+          )
+        ''');
+      } catch (_) {}
+    }
   }
 
   Future _createDB(Database db, int version) async {
@@ -64,6 +75,13 @@ class SpesAppDatabaseHelper {
         latitude REAL,
         longitude REAL,
         is_closed INTEGER DEFAULT 0
+      )
+    ''');
+
+    await db.execute('''
+      CREATE TABLE categories (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL
       )
     ''');
     
@@ -190,6 +208,23 @@ class SpesAppDatabaseHelper {
     final result = await db.query('products', where: 'barcode = ?', whereArgs: [barcode]);
     if (result.isNotEmpty) return Product.fromMap(result.first);
     return null;
+  }
+
+  // --- CATEGORY METHODS ---
+  Future<void> insertCategory(Category category) async {
+    final db = await instance.database;
+    await db.insert('categories', category.toMap(), conflictAlgorithm: ConflictAlgorithm.replace);
+  }
+
+  Future<List<Category>> getCategories() async {
+    final db = await instance.database;
+    final result = await db.query('categories', orderBy: 'name ASC');
+    return result.map((json) => Category.fromMap(json)).toList();
+  }
+
+  Future<void> deleteCategory(String id) async {
+    final db = await instance.database;
+    await db.delete('categories', where: 'id = ?', whereArgs: [id]);
   }
 
   // --- PRICE HISTORY METHODS ---

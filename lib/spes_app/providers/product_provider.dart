@@ -25,4 +25,10 @@ class ProductNotifier extends Notifier<List<Product>> {
     await SpesAppDatabaseHelper.instance.insertProduct(product);
     await loadProducts(); // Ricarica la lista aggiornata
   }
+
+  // Aggiorna un prodotto esistente
+  Future<void> updateProduct(Product product) async {
+    await SpesAppDatabaseHelper.instance.insertProduct(product); // insertProduct usa ConflictAlgorithm.replace
+    await loadProducts(); // Ricarica la lista aggiornata
+  }
 }
