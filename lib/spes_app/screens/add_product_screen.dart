@@ -6,6 +6,7 @@ import '../providers/product_provider.dart';
 import '../providers/store_provider.dart';
 import '../providers/price_history_provider.dart';
 import '../providers/category_provider.dart';
+import 'package:intl/intl.dart';
 import 'package:uuid/uuid.dart';
 import 'barcode_scanner_screen.dart';
 import 'add_store_screen.dart';
@@ -14,6 +15,9 @@ import 'package:path_provider/path_provider.dart';
 import 'dart:io';
 import 'package:path/path.dart' as p;
 
+/// Schermata per l'aggiunta o la modifica di un prodotto.
+/// Include la scansione del codice a barre, il calcolo del prezzo al Kg,
+/// la selezione dello store (con GPS o manuale) e il salvataggio nel database.
 class AddProductScreen extends ConsumerStatefulWidget {
   final String? initialBarcode;
   final String? preselectedStoreId;
@@ -37,7 +41,7 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
   final _discountPercentController = TextEditingController();
 
   String _description = '';
-  String? _weightUnit = 'kg'; // Default unit
+  String? _weightUnit = 'kg'; // Unità di misura predefinita
   String? _selectedStoreId;
   String? _promoType = 'Nessuna';
   DateTime? _promoValidUntil;
@@ -51,11 +55,15 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
   @override
   void initState() {
     super.initState();
+    // Listener per calcolare il prezzo al Kg in tempo reale
     _priceController.addListener(_calculatePricePerKg);
     _weightController.addListener(_calculatePricePerKg);
+    
     if (widget.preselectedStoreId != null) {
       _selectedStoreId = widget.preselectedStoreId;
     }
+    
+    // Se la schermata viene aperta con un barcode già scansionato
     if (widget.initialBarcode != null && widget.initialBarcode!.isNotEmpty) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _processScannedBarcode(widget.initialBarcode!);
@@ -75,6 +83,7 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
     super.dispose();
   }
 
+  /// Calcola automaticamente il prezzo al Litro o al Kg in base al peso inserito
   void _calculatePricePerKg() {
     final price = double.tryParse(_priceController.text.replaceAll(',', '.'));
     final weight = double.tryParse(_weightController.text.replaceAll(',', '.'));
@@ -83,7 +92,7 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
       switch (_weightUnit) {
         case 'g':
         case 'ml':
-          calculatedPrice = price / (weight / 1000);
+          calculatedPrice = price / (weight / 1000); // Converte in Kg/L
           break;
         case 'kg':
         case 'l':
@@ -97,11 +106,16 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
     }
   }
 
+  /// Elabora il codice a barre scansionato.
+  /// Se è un prodotto fresco (codice che inizia per 2), estrae il prezzo direttamente dal barcode.
+  /// Se il prodotto è già in archivio, popola automaticamente i campi.
   void _processScannedBarcode(String code) async {
     String searchBarcode = code;
 
+    // Gestione Codici a Barre "Variabili" (es. prodotti pesati al banco fresco)
+    // Solitamente iniziano con '2' e contengono il prezzo nelle ultime cifre
     if (code.length == 13 && code.startsWith('2')) {
-      final baseBarcode = code.substring(0, 7);
+      final baseBarcode = code.substring(0, 7); // Codice base del prodotto
       searchBarcode = baseBarcode;
       final priceDigits = code.substring(7, 12);
       final parsedPrice = double.tryParse(priceDigits);
@@ -119,17 +133,18 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
     final products = ref.read(productProvider);
     final existingProduct = products.where((p) => p.barcode == searchBarcode).firstOrNull;
 
-    // Recupera lo storico prezzi per scoprire l'ultimo supermercato
+    // Recupera lo storico prezzi per scoprire l'ultimo supermercato visitato per questo prodotto
     final history = await ref.read(priceHistoryProvider).getHistoryForProduct(searchBarcode);
     if (widget.preselectedStoreId != null) {
-       // Ha già precedenza perché impostato in initState
+       // Ha già precedenza se passato come parametro
     } else if (history.isNotEmpty && mounted) {
       setState(() {
-        _selectedStoreId = history.first.storeId;
+        _selectedStoreId = history.first.storeId; // Suggerisce l'ultimo store noto
       });
     }
 
     if (existingProduct != null) {
+      // Prodotto già conosciuto: precompiliamo i campi
       _nameController.text = existingProduct.name;
       _brandController.text = existingProduct.brand ?? '';
       _description = existingProduct.description ?? '';
@@ -154,19 +169,17 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
       }
     } else {
       bool isFresh = searchBarcode.length == 7 && searchBarcode.startsWith('2');
-      if (isFresh) {
+      if (isFresh && mounted) {
         if (_nameController.text.isEmpty) {
           _nameController.text = 'Prodotto Banco Fresco (Rilevato)';
         }
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('🏷️ Nuovo prodotto fresco! Memorizzalo. Prezzo estratto!'),
-              backgroundColor: Colors.indigo,
-              duration: Duration(seconds: 4),
-            ),
-          );
-        }
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('🏷️ Nuovo prodotto fresco! Memorizzalo. Prezzo estratto!'),
+            backgroundColor: Colors.indigo,
+            duration: Duration(seconds: 4),
+          ),
+        );
       }
     }
   }
@@ -202,6 +215,7 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
     }
   }
 
+  /// Salva il prodotto e la rilevazione prezzo nel database
   void _saveProduct() async {
     if (_formKey.currentState!.validate()) {
       _formKey.currentState!.save();
@@ -213,7 +227,7 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
         return;
       }
 
-      final priceValue = double.tryParse(_priceController.text);
+      final priceValue = double.tryParse(_priceController.text.replaceAll(',', '.'));
       if (priceValue == null) return;
 
       // Genera codice manuale se assente
@@ -230,17 +244,17 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
         name: _nameController.text,
         description: _description,
         brand: _brandController.text,
-        weight: double.tryParse(_weightController.text),
+        weight: double.tryParse(_weightController.text.replaceAll(',', '.')),
         weightUnit: _weightUnit,
         pricePerKg: double.tryParse(_pricePerKgController.text),
-        imageUrl: localImagePath ?? (File(_barcodeController.text).existsSync() ? _barcodeController.text : null), // Se stiamo modificando e l'immagine è già lì
+        imageUrl: localImagePath ?? (File(_barcodeController.text).existsSync() ? _barcodeController.text : null),
         category: _selectedCategory,
       );
 
       // Salva nel DB Prodotti
       await ref.read(productProvider.notifier).addProduct(newProduct);
 
-      // Salva record dello storico
+      // Salva record dello storico prezzi
       int? expirationTimestamp = _promoValidUntil?.millisecondsSinceEpoch;
       String? cleanPromoType = _promoType == 'Nessuna' ? null : _promoType;
       if (cleanPromoType == 'Sconto %' && _discountPercentController.text.isNotEmpty) {
@@ -308,7 +322,7 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
               ],
             ),
             const SizedBox(height: 16),
-            // Sezione Foto
+            // Sezione Foto del Prodotto
             Center(
               child: Stack(
                 children: [
@@ -364,6 +378,7 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
               validator: (value) => value == null || value.isEmpty ? 'Inserisci nome' : null,
             ),
             const SizedBox(height: 16),
+            // Selezione della Categoria tramite Dropdown sincronizzato
             Consumer(
               builder: (context, ref, child) {
                 final categories = ref.watch(categoryProvider);
@@ -426,12 +441,14 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
             TextFormField(
               controller: _pricePerKgController,
               decoration: const InputDecoration(
-                labelText: 'Prezzo al Kg (€) (Opzionale)',
+                labelText: 'Prezzo al Kg/L (€) (Auto)',
                 border: OutlineInputBorder(),
               ),
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              readOnly: true, // Campo calcolato automaticamente
             ),
             const SizedBox(height: 16),
+            // Selezione del Punto Vendita
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -485,6 +502,7 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
               },
             ),
             const SizedBox(height: 16),
+            // Gestione Promozioni
             DropdownButtonFormField<String>(
               decoration: const InputDecoration(
                 labelText: 'Promozione',
@@ -515,7 +533,7 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
                 contentPadding: EdgeInsets.zero,
                 title: Text(_promoValidUntil == null 
                   ? 'Nessuna Scadenza Selezionata' 
-                  : 'Fino al: ${_promoValidUntil!.day.toString().padLeft(2, '0')}/${_promoValidUntil!.month.toString().padLeft(2, '0')}/${_promoValidUntil!.year}'),
+                  : 'Fino al: ${DateFormat('dd/MM/yyyy').format(_promoValidUntil!)}'),
                 trailing: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [

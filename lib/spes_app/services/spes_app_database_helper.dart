@@ -210,18 +210,22 @@ class SpesAppDatabaseHelper {
     return null;
   }
 
-  // --- CATEGORY METHODS ---
+  // --- METODI PER LE CATEGORIE ---
+
+  /// Aggiunge o aggiorna una categoria nel database
   Future<void> insertCategory(Category category) async {
     final db = await instance.database;
     await db.insert('categories', category.toMap(), conflictAlgorithm: ConflictAlgorithm.replace);
   }
 
+  /// Recupera tutte le categorie salvate, ordinate alfabeticamente
   Future<List<Category>> getCategories() async {
     final db = await instance.database;
     final result = await db.query('categories', orderBy: 'name ASC');
     return result.map((json) => Category.fromMap(json)).toList();
   }
 
+  /// Elimina una categoria tramite il suo ID
   Future<void> deleteCategory(String id) async {
     final db = await instance.database;
     await db.delete('categories', where: 'id = ?', whereArgs: [id]);

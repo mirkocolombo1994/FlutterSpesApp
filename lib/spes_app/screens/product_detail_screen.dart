@@ -10,6 +10,9 @@ import '../providers/price_history_provider.dart';
 import '../providers/store_provider.dart';
 import '../providers/category_provider.dart';
 
+/// Schermata di dettaglio di un singolo prodotto.
+/// Mostra informazioni tecniche, immagine, e storico prezzi per negozio.
+/// Include una modalità di modifica per aggiornare i dati del prodotto.
 class ProductDetailScreen extends ConsumerStatefulWidget {
   final Product product;
 
@@ -20,7 +23,10 @@ class ProductDetailScreen extends ConsumerStatefulWidget {
 }
 
 class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
+  // Stato per gestire la modalità modifica
   bool _isEditing = false;
+  
+  // Controller per i campi di testo in modalità modifica
   late TextEditingController _nameController;
   late TextEditingController _categoryController;
   late TextEditingController _brandController;
@@ -45,6 +51,7 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
     super.dispose();
   }
 
+  /// Carica la cronologia dei prezzi per questo prodotto dal DB
   Future<void> _loadPriceHistory() async {
     final history = await ref.read(priceHistoryProvider).getHistoryForProduct(widget.product.barcode);
     if (mounted) {
@@ -55,6 +62,7 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
     }
   }
 
+  /// Salva le modifiche apportate al prodotto nel DB
   Future<void> _saveChanges() async {
     final updatedProduct = Product(
       barcode: widget.product.barcode,
@@ -72,7 +80,7 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
     
     if (mounted) {
       setState(() {
-        _isEditing = false;
+        _isEditing = false; // Torna in modalità visualizzazione
       });
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Prodotto aggiornato con successo')),
@@ -82,11 +90,12 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Watch the product list to get the most updated version of THIS product
+    // IMPORTANTE: Ascoltiamo la lista dei prodotti dal provider.
+    // In questo modo, se il prodotto viene aggiornato, UI reagisce immediatamente.
     final products = ref.watch(productProvider);
     final product = products.firstWhere(
       (p) => p.barcode == widget.product.barcode,
-      orElse: () => widget.product,
+      orElse: () => widget.product, // Fallback se non trovato
     );
 
     // Watch stores for mapping names in the table

@@ -4,6 +4,8 @@ import 'package:uuid/uuid.dart';
 import '../models/category.dart';
 import '../providers/category_provider.dart';
 
+/// Schermata per la gestione delle categorie dei prodotti.
+/// Permette di visualizzare, aggiungere ed eliminare categorie.
 class CategoriesScreen extends ConsumerStatefulWidget {
   const CategoriesScreen({super.key});
 
@@ -12,6 +14,7 @@ class CategoriesScreen extends ConsumerStatefulWidget {
 }
 
 class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
+  // Controller per il campo di testo nel dialogo di aggiunta
   final _textFieldController = TextEditingController();
 
   @override
@@ -20,19 +23,21 @@ class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
     super.dispose();
   }
 
+  /// Crea una nuova categoria e la salva tramite il provider
   void _addCategory() {
     final name = _textFieldController.text.trim();
     if (name.isNotEmpty) {
       final category = Category(
-        id: const Uuid().v4(),
+        id: const Uuid().v4(), // Genera un ID univoco
         name: name,
       );
       ref.read(categoryProvider.notifier).addCategory(category);
       _textFieldController.clear();
-      Navigator.pop(context); // Close dialog
+      Navigator.pop(context); // Chiude il dialogo
     }
   }
 
+  /// Mostra un dialogo di input per inserire il nome della nuova categoria
   void _showAddDialog() {
     showDialog(
       context: context,
@@ -59,6 +64,7 @@ class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Ascolta il provider per reagire ai cambiamenti della lista categorie
     final categories = ref.watch(categoryProvider);
 
     return Scaffold(
@@ -76,6 +82,7 @@ class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
                   trailing: IconButton(
                     icon: const Icon(Icons.delete, color: Colors.red),
                     onPressed: () {
+                      // Elimina la categoria selezionata
                       ref.read(categoryProvider.notifier).deleteCategory(category.id);
                     },
                   ),
@@ -84,6 +91,7 @@ class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
             ),
       floatingActionButton: FloatingActionButton(
         onPressed: _showAddDialog,
+        tooltip: 'Aggiungi Categoria',
         child: const Icon(Icons.add),
       ),
     );

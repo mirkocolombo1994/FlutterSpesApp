@@ -6,6 +6,9 @@ import 'spes_app/screens/price_history_screen.dart';
 import 'spes_app/screens/current_shopping_screen.dart';
 import 'spes_app/screens/categories_screen.dart';
 
+/// Schermata principale dell'applicazione SpesApp.
+/// Gestisce la navigazione tramite BottomNavigationBar per le sezioni principali
+/// e un Drawer laterale per le sezioni di gestione secondarie.
 class SpesAppScreen extends StatefulWidget {
   const SpesAppScreen({super.key});
 
@@ -16,17 +19,20 @@ class SpesAppScreen extends StatefulWidget {
 class _SpesAppScreenState extends State<SpesAppScreen> {
   int _currentIndex = 0;
   
+  // Lista delle pagine accessibili dalla barra di navigazione inferiore
   final List<Widget> _pages = const [
-    CurrentShoppingScreen(),
-    ShoppingListsScreen(),
+    CurrentShoppingScreen(), // La "Cassa" per la spesa in corso
+    ShoppingListsScreen(),   // Le liste della spesa create dall'utente
   ];
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      // AppBar che mostra il titolo in base alla pagina selezionata
       appBar: AppBar(
         title: Text(_currentIndex == 0 ? 'Spesa in Corso' : 'Liste Spesa'),
       ),
+      // Menu laterale a scomparsa per le opzioni di gestione
       drawer: Drawer(
         child: Column(
           children: [
@@ -72,6 +78,7 @@ class _SpesAppScreenState extends State<SpesAppScreen> {
         ),
       ),
       body: _pages[_currentIndex],
+      // Barra di navigazione inferiore semplificata con solo 2 icone
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _currentIndex,
         onTap: (index) {
