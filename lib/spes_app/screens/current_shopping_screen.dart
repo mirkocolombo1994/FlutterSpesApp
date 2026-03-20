@@ -11,6 +11,7 @@ import '../models/store.dart';
 import '../services/location_service.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
+import 'dart:io';
 
 class CurrentShoppingScreen extends ConsumerStatefulWidget {
   const CurrentShoppingScreen({super.key});
@@ -142,10 +143,30 @@ class _CurrentShoppingScreenState extends ConsumerState<CurrentShoppingScreen> {
                       final isFresh = item.barcode.length == 7 && item.barcode.startsWith('2');
                       
                       return ListTile(
-                        leading: CircleAvatar(
-                          backgroundColor: Colors.indigo.shade100,
-                          child: Text('${item.quantity}x', style: const TextStyle(color: Colors.indigo, fontWeight: FontWeight.bold, fontSize: 13)),
-                        ),
+                        leading: item.imageUrl != null && File(item.imageUrl!).existsSync()
+                          ? Container(
+                              width: 48,
+                              height: 48,
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(8),
+                                image: DecorationImage(
+                                  image: FileImage(File(item.imageUrl!)),
+                                  fit: BoxFit.cover,
+                                ),
+                              ),
+                              child: Align(
+                                alignment: Alignment.bottomRight,
+                                child: Container(
+                                  padding: const EdgeInsets.all(2),
+                                  decoration: const BoxDecoration(color: Colors.white70, shape: BoxShape.circle),
+                                  child: Text('${item.quantity}x', style: const TextStyle(color: Colors.indigo, fontWeight: FontWeight.bold, fontSize: 10)),
+                                ),
+                              ),
+                            )
+                          : CircleAvatar(
+                              backgroundColor: Colors.indigo.shade100,
+                              child: Text('${item.quantity}x', style: const TextStyle(color: Colors.indigo, fontWeight: FontWeight.bold, fontSize: 13)),
+                            ),
                         title: Row(
                           children: [
                             Expanded(child: Text(item.name, style: const TextStyle(fontWeight: FontWeight.bold))),
@@ -293,6 +314,7 @@ class _CurrentShoppingScreenState extends ConsumerState<CurrentShoppingScreen> {
                   price: price,
                   unitPrice: product?.pricePerKg,
                   promoType: latestHistory?.promoType,
+                  imageUrl: product?.imageUrl,
                   status: status,
                 )
               );

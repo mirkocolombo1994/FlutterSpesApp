@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'price_history_provider.dart';
+import 'product_provider.dart';
 
 enum CartItemStatus { ok, warning, error }
 
@@ -10,6 +11,7 @@ class CartItem {
   final double price;
   final double? unitPrice; // Prezzo al kg/l/pz
   final String? promoType; // Sconto, 1+1, etc.
+  final String? imageUrl;
   final CartItemStatus status;
   int quantity;
 
@@ -20,6 +22,7 @@ class CartItem {
     required this.price,
     this.unitPrice,
     this.promoType,
+    this.imageUrl,
     this.status = CartItemStatus.ok,
     this.quantity = 1,
   });
@@ -31,7 +34,9 @@ class CartNotifier extends Notifier<List<CartItem>> {
 
   void addItem(CartItem item) {
     // Se lo stesso prodotto allo stesso prezzo è già nel carrello, aumenta solo la quantità
-    final idx = state.indexWhere((e) => e.barcode == item.barcode && e.price == item.price);
+    final idx = state.indexWhere(
+      (e) => e.barcode == item.barcode && e.price == item.price,
+    );
     if (idx >= 0) {
       final curr = state[idx];
       state = [
@@ -43,6 +48,7 @@ class CartNotifier extends Notifier<List<CartItem>> {
           price: curr.price,
           unitPrice: curr.unitPrice,
           promoType: curr.promoType,
+          imageUrl: curr.imageUrl,
           status: curr.status,
           quantity: curr.quantity + 1,
         ),
@@ -64,12 +70,18 @@ class CartNotifier extends Notifier<List<CartItem>> {
   // Aggiorna i prezzi di tutti i prodotti in base al nuovo supermercato selezionato
   Future<void> refreshPrices(String storeId, WidgetRef ref) async {
     final historyNotifier = ref.read(priceHistoryProvider);
-    
+    final products = ref.read(productProvider);
+
     List<CartItem> newList = [];
     for (var item in state) {
       final history = await historyNotifier.getHistoryForProduct(item.barcode);
-      final storeHistory = history.where((h) => h.storeId == storeId).firstOrNull;
-      
+      final storeHistory = history
+          .where((h) => h.storeId == storeId)
+          .firstOrNull;
+      final product = products
+          .where((p) => p.barcode == item.barcode)
+          .firstOrNull;
+
       CartItemStatus status = CartItemStatus.ok;
       double newPrice = 0.0;
       String? promo;
@@ -84,19 +96,24 @@ class CartNotifier extends Notifier<List<CartItem>> {
         }
       }
 
-      newList.add(CartItem(
-        id: item.id,
-        barcode: item.barcode,
-        name: item.name,
-        price: newPrice,
-        unitPrice: item.unitPrice,
-        promoType: promo,
-        status: status,
-        quantity: item.quantity,
-      ));
+      newList.add(
+        CartItem(
+          id: item.id,
+          barcode: item.barcode,
+          name: item.name,
+          price: newPrice,
+          unitPrice: item.unitPrice,
+          promoType: promo,
+          imageUrl: product?.imageUrl,
+          status: status,
+          quantity: item.quantity,
+        ),
+      );
     }
     state = newList;
   }
 }
 
-final cartProvider = NotifierProvider<CartNotifier, List<CartItem>>(() => CartNotifier());
+final cartProvider = NotifierProvider<CartNotifier, List<CartItem>>(
+  () => CartNotifier(),
+);

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'dart:io';
 import 'package:uuid/uuid.dart';
 import '../models/shopping_list.dart';
 import '../models/shopping_list_item.dart';
@@ -191,11 +192,34 @@ class _ShoppingListDetailScreenState extends ConsumerState<ShoppingListDetailScr
     }
 
     return ListTile(
-      leading: Checkbox(
-        value: item.isChecked,
-        onChanged: (val) {
-          ref.read(shoppingListItemServiceProvider).toggleItemCheck(item);
-        },
+      leading: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Checkbox(
+            value: item.isChecked,
+            onChanged: (val) {
+              ref.read(shoppingListItemServiceProvider).toggleItemCheck(item);
+            },
+          ),
+          if (product.imageUrl != null && File(product.imageUrl!).existsSync())
+            Container(
+              width: 40,
+              height: 40,
+              margin: const EdgeInsets.only(right: 8),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(4),
+                image: DecorationImage(
+                  image: FileImage(File(product.imageUrl!)),
+                  fit: BoxFit.cover,
+                ),
+              ),
+            )
+          else
+            const Padding(
+              padding: EdgeInsets.only(right: 8.0),
+              child: Icon(Icons.inventory, color: Colors.grey),
+            ),
+        ],
       ),
       title: Text(product.name, style: TextStyle(
         decoration: item.isChecked ? TextDecoration.lineThrough : null,

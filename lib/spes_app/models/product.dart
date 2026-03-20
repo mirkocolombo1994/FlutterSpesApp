@@ -5,6 +5,8 @@ class Product {
   final String? brand;
   final double? weight;
   final String? weightUnit;
+  final String? imageUrl;
+  final String? category;
   final double? pricePerKg;
 
   Product({
@@ -14,6 +16,8 @@ class Product {
     this.brand,
     this.weight,
     this.weightUnit,
+    this.imageUrl,
+    this.category,
     this.pricePerKg,
   });
 
@@ -26,6 +30,8 @@ class Product {
       'weight': weight,
       'weight_unit': weightUnit,
       'price_per_kg': pricePerKg,
+      'image_url': imageUrl,
+      'category': category,
     };
   }
 
@@ -38,6 +44,8 @@ class Product {
       weight: map['weight'],
       weightUnit: map['weight_unit'],
       pricePerKg: map['price_per_kg'],
+      imageUrl: map['image_url'],
+      category: map['category'],
     );
   }
 }

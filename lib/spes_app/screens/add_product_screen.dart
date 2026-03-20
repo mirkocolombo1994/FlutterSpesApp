@@ -8,6 +8,10 @@ import '../providers/price_history_provider.dart';
 import 'package:uuid/uuid.dart';
 import 'barcode_scanner_screen.dart';
 import 'add_store_screen.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:path_provider/path_provider.dart';
+import 'dart:io';
+import 'package:path/path.dart' as p;
 
 class AddProductScreen extends ConsumerStatefulWidget {
   final String? initialBarcode;
@@ -37,6 +41,16 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
   String? _promoType = 'Nessuna';
   DateTime? _promoValidUntil;
   final List<String> _promoTypes = ['Nessuna', 'Sconto %', 'Prezzo Tagliato', '1+1', '3x2', 'Altro'];
+
+  File? _imageFile;
+  String? _selectedCategory;
+  final List<String> _categories = [
+    'Banco fresco', 'Biscotti', 'Caffè', 'Tè/Infusi', 
+    'Frutta/Verdura', 'Salumi', 'Bevande', 'Pasta/Riso', 
+    'Surgelati', 'Pulizia', 'Igiene', 'Altro'
+  ];
+
+  final ImagePicker _picker = ImagePicker();
 
   @override
   void initState() {
@@ -124,6 +138,11 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
       _brandController.text = existingProduct.brand ?? '';
       _description = existingProduct.description ?? '';
       _weightUnit = existingProduct.weightUnit ?? 'kg';
+      _selectedCategory = existingProduct.category;
+
+      if (existingProduct.imageUrl != null) {
+          _imageFile = File(existingProduct.imageUrl!);
+      }
       
       bool isFresh = searchBarcode.length == 7 && searchBarcode.startsWith('2');
       if (mounted) {
@@ -156,6 +175,37 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
     }
   }
 
+  Future<void> _pickImage(ImageSource source) async {
+    final XFile? pickedFile = await _picker.pickImage(
+      source: source,
+      maxWidth: 800,
+      maxHeight: 800,
+      imageQuality: 85,
+    );
+
+    if (pickedFile != null) {
+      setState(() {
+        _imageFile = File(pickedFile.path);
+      });
+    }
+  }
+
+  Future<String?> _saveImageLocally(String barcode) async {
+    if (_imageFile == null) return null;
+    try {
+      final directory = await getApplicationDocumentsDirectory();
+      final path = p.join(directory.path, 'product_images');
+      await Directory(path).create(recursive: true);
+      
+      final fileName = '${barcode}_${DateTime.now().millisecondsSinceEpoch}.jpg';
+      final localFile = await _imageFile!.copy(p.join(path, fileName));
+      return localFile.path;
+    } catch (e) {
+      debugPrint('Errore nel salvataggio immagine: $e');
+      return null;
+    }
+  }
+
   void _saveProduct() async {
     if (_formKey.currentState!.validate()) {
       _formKey.currentState!.save();
@@ -170,14 +220,25 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
       final priceValue = double.tryParse(_priceController.text);
       if (priceValue == null) return;
 
+      // Genera codice manuale se assente
+      String finalBarcode = _barcodeController.text;
+      if (finalBarcode.isEmpty) {
+        finalBarcode = 'MANUAL_${const Uuid().v4().substring(0, 8).toUpperCase()}';
+      }
+
+      // Salva l'immagine localmente prima di salvare il prodotto
+      String? localImagePath = await _saveImageLocally(finalBarcode);
+
       final newProduct = Product(
-        barcode: _barcodeController.text,
+        barcode: finalBarcode,
         name: _nameController.text,
         description: _description,
         brand: _brandController.text,
         weight: double.tryParse(_weightController.text),
         weightUnit: _weightUnit,
         pricePerKg: double.tryParse(_pricePerKgController.text),
+        imageUrl: localImagePath ?? (File(_barcodeController.text).existsSync() ? _barcodeController.text : null), // Se stiamo modificando e l'immagine è già lì
+        category: _selectedCategory,
       );
 
       // Salva nel DB Prodotti
@@ -192,7 +253,7 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
 
       final prHistory = PriceHistory(
         id: const Uuid().v4(),
-        productBarcode: _barcodeController.text,
+        productBarcode: finalBarcode,
         storeId: _selectedStoreId!,
         price: priceValue,
         timestamp: DateTime.now().millisecondsSinceEpoch,
@@ -201,7 +262,7 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
       );
       await ref.read(priceHistoryProvider).addPriceHistory(prHistory);
 
-      if (mounted) Navigator.pop(context, _barcodeController.text);
+      if (mounted) Navigator.pop(context, finalBarcode);
     }
   }
 
@@ -230,10 +291,10 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
                   child: TextFormField(
                     controller: _barcodeController,
                     decoration: const InputDecoration(
-                      labelText: 'Codice a Barre *',
+                      labelText: 'Codice a Barre (Opzionale)',
                       border: OutlineInputBorder(),
+                      helperText: 'Lascia vuoto per inserimento manuale',
                     ),
-                    validator: (value) => value == null || value.isEmpty ? 'Inserisci codice' : null,
                   ),
                 ),
                 IconButton(
@@ -251,6 +312,53 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
               ],
             ),
             const SizedBox(height: 16),
+            // Sezione Foto
+            Center(
+              child: Stack(
+                children: [
+                  Container(
+                    width: 120,
+                    height: 120,
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade200,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.grey.shade400),
+                    ),
+                    child: _imageFile != null
+                        ? ClipRRect(
+                            borderRadius: BorderRadius.circular(12),
+                            child: Image.file(_imageFile!, fit: BoxFit.cover),
+                          )
+                        : const Icon(Icons.add_a_photo, size: 50, color: Colors.grey),
+                  ),
+                  Positioned(
+                    bottom: 0,
+                    right: 0,
+                    child: CircleAvatar(
+                      backgroundColor: Colors.indigo,
+                      radius: 20,
+                      child: IconButton(
+                        icon: const Icon(Icons.camera_alt, color: Colors.white, size: 20),
+                        onPressed: () => _pickImage(ImageSource.camera),
+                      ),
+                    ),
+                  ),
+                  Positioned(
+                    bottom: 0,
+                    left: 0,
+                    child: CircleAvatar(
+                      backgroundColor: Colors.blueGrey,
+                      radius: 20,
+                      child: IconButton(
+                        icon: const Icon(Icons.photo_library, color: Colors.white, size: 20),
+                        onPressed: () => _pickImage(ImageSource.gallery),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
             TextFormField(
               controller: _nameController,
               decoration: const InputDecoration(
@@ -258,6 +366,20 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
                 border: OutlineInputBorder(),
               ),
               validator: (value) => value == null || value.isEmpty ? 'Inserisci nome' : null,
+            ),
+            const SizedBox(height: 16),
+            DropdownButtonFormField<String>(
+              decoration: const InputDecoration(
+                labelText: 'Categoria',
+                border: OutlineInputBorder(),
+              ),
+              value: _selectedCategory,
+              items: _categories.map((c) => DropdownMenuItem(value: c, child: Text(c))).toList(),
+              onChanged: (val) {
+                setState(() {
+                  _selectedCategory = val;
+                });
+              },
             ),
             const SizedBox(height: 16),
             TextFormField(

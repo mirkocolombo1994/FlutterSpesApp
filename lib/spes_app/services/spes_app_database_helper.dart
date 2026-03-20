@@ -24,7 +24,7 @@ class SpesAppDatabaseHelper {
 
     return await openDatabase(
       path,
-      version: 4,
+      version: 5,
       onCreate: _createDB,
       onUpgrade: _upgradeDB,
       onConfigure: (db) async {
@@ -46,10 +46,10 @@ class SpesAppDatabaseHelper {
         await db.execute('ALTER TABLE stores ADD COLUMN is_closed INTEGER DEFAULT 0');
       } catch (_) {}
     }
-    if (oldVersion < 4) {
+    if (oldVersion < 5) {
       try {
-        await db.execute('ALTER TABLE price_history ADD COLUMN promo_type TEXT');
-        await db.execute('ALTER TABLE price_history ADD COLUMN promo_valid_until INTEGER');
+        await db.execute('ALTER TABLE products ADD COLUMN image_url TEXT');
+        await db.execute('ALTER TABLE products ADD COLUMN category TEXT');
       } catch (_) {}
     }
   }
@@ -75,7 +75,9 @@ class SpesAppDatabaseHelper {
         brand TEXT,
         weight REAL,
         weight_unit TEXT,
-        price_per_kg REAL
+        price_per_kg REAL,
+        image_url TEXT,
+        category TEXT
       )
     ''');
 
