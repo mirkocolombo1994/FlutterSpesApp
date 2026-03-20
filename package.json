@@ -8,7 +8,7 @@
     "test": "test"
   },
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "release": "standard-version"
   },
   "repository": {
     "type": "git",
@@ -22,6 +22,7 @@
   },
   "homepage": "https://github.com/mirkocolombo1994/FlutterSpesApp#readme",
   "devDependencies": {
+    "js-yaml": "^4.1.1",
     "standard-version": "^9.5.0"
   }
 }

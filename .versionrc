@@ -1,0 +1,49 @@
+{
+    "header": "# Registro delle Modifiche (Changelog)\n",
+    "types": [
+        {
+            "type": "feat",
+            "section": "✨ Nuove Funzionalità"
+        },
+        {
+            "type": "fix",
+            "section": "🐛 Bug Fixes"
+        },
+        {
+            "type": "chore",
+            "section": "⚙️ Manutenzione"
+        },
+        {
+            "type": "docs",
+            "section": "📚 Documentazione"
+        },
+        {
+            "type": "style",
+            "section": "💄 Stile e UI"
+        },
+        {
+            "type": "refactor",
+            "section": "♻️ Refactoring Codice"
+        },
+        {
+            "type": "perf",
+            "section": "⚡ Miglioramenti Performance"
+        },
+        {
+            "type": "test",
+            "section": "✅ Test"
+        }
+    ],
+    "bumpFiles": [
+        {
+            "filename": "pubspec.yaml",
+            "updater": "scripts/update-pubspec.js"
+        }
+    ],
+    "packageFiles": [
+        {
+            "filename": "pubspec.yaml",
+            "updater": "scripts/update-pubspec.js"
+        }
+    ]
+}
