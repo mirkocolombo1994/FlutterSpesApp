@@ -305,30 +305,32 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
                 padding: const EdgeInsets.all(16.0),
                 child: Column(
                   children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: TextFormField(
-                            controller: _barcodeController,
-                            decoration: const InputDecoration(
-                              labelText: AppStrings.barcodeOptional,
-                              border: OutlineInputBorder(),
+                    if (!widget.isFastMode) ...[
+                      Row(
+                        children: [
+                          Expanded(
+                            child: TextFormField(
+                              controller: _barcodeController,
+                              decoration: const InputDecoration(
+                                labelText: AppStrings.barcodeOptional,
+                                border: OutlineInputBorder(),
+                              ),
                             ),
                           ),
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.qr_code_scanner, size: 36),
-                          onPressed: () async {
-                            final String? scannedCode = await Navigator.push(
-                              context,
-                              MaterialPageRoute(builder: (context) => const BarcodeScannerScreen()),
-                            );
-                            if (scannedCode != null) _processScannedBarcode(scannedCode);
-                          },
-                        )
-                      ],
-                    ),
-                    const SizedBox(height: 16),
+                          IconButton(
+                            icon: const Icon(Icons.qr_code_scanner, size: 36),
+                            onPressed: () async {
+                              final String? scannedCode = await Navigator.push(
+                                context,
+                                MaterialPageRoute(builder: (context) => const BarcodeScannerScreen()),
+                              );
+                              if (scannedCode != null) _processScannedBarcode(scannedCode);
+                            },
+                          )
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                    ],
                     // Foto
                     if (!widget.isFastMode) ...[
                       Center(
@@ -379,101 +381,134 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
                       controller: _brandController,
                       decoration: const InputDecoration(labelText: AppStrings.brandLabel, border: OutlineInputBorder()),
                     ),
-                    const SizedBox(height: 16),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: TextFormField(
-                            controller: _weightController,
-                            decoration: const InputDecoration(labelText: AppStrings.weightQuantity, border: OutlineInputBorder()),
-                            keyboardType: TextInputType.number,
+                    if (!widget.isFastMode) ...[
+                      const SizedBox(height: 16),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: TextFormField(
+                              controller: _weightController,
+                              decoration: const InputDecoration(labelText: AppStrings.weightQuantity, border: OutlineInputBorder()),
+                              keyboardType: TextInputType.number,
+                            ),
                           ),
-                        ),
-                        const SizedBox(width: 12),
-                        DropdownButton<String>(
-                          value: _weightUnit,
-                          items: [AppStrings.unitKg, AppStrings.unitG, AppStrings.unitL, AppStrings.unitMl, AppStrings.unitPz]
-                              .map((u) => DropdownMenuItem(value: u, child: Text(u))).toList(),
-                          onChanged: (val) {
-                            setState(() => _weightUnit = val);
-                            _calculatePricePerKg();
-                          },
-                        )
-                      ],
-                    ),
+                          const SizedBox(width: 12),
+                          DropdownButton<String>(
+                            value: _weightUnit,
+                            items: [AppStrings.unitKg, AppStrings.unitG, AppStrings.unitL, AppStrings.unitMl, AppStrings.unitPz]
+                                .map((u) => DropdownMenuItem(value: u, child: Text(u))).toList(),
+                            onChanged: (val) {
+                              setState(() => _weightUnit = val);
+                              _calculatePricePerKg();
+                            },
+                          )
+                        ],
+                      ),
+                    ],
                   ],
                 ),
               ),
             ),
-            const SizedBox(height: 24),
-            // SEZIONE 2: RILEVAZIONE PREZZO
-            _buildSectionHeader(AppStrings.priceEntrySection, Icons.payments_outlined),
-            const SizedBox(height: 12),
-            Card(
-              elevation: 2,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              child: ExpansionTile(
-                initiallyExpanded: widget.preselectedStoreId != null,
-                title: const Text('Prezzo e Supermercato', style: TextStyle(fontWeight: FontWeight.bold)),
-                subtitle: Text(_selectedStoreId != null ? 'Punto vendita selezionato' : 'Tocca per compilare'),
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.all(16.0),
-                    child: Column(
-                      children: [
-                        TextFormField(
-                          controller: _pricePerKgController,
-                          decoration: const InputDecoration(labelText: AppStrings.pricePerKgAuto, border: OutlineInputBorder()),
-                          readOnly: true,
-                        ),
-                        const SizedBox(height: 16),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: DropdownButtonFormField<String>(
-                                decoration: const InputDecoration(labelText: AppStrings.storeSelectionPrompt, border: OutlineInputBorder()),
-                                value: stores.any((s) => s.id == _selectedStoreId) ? _selectedStoreId : null,
-                                items: stores.map((s) => DropdownMenuItem(value: s.id, child: Text(s.name))).toList(),
-                                onChanged: (val) => setState(() => _selectedStoreId = val),
-                              ),
-                            ),
-                            IconButton(
-                              icon: const Icon(Icons.add_business, size: 30, color: Colors.indigo),
-                              onPressed: () async {
-                                final id = await Navigator.push<String>(context, MaterialPageRoute(builder: (_) => const AddStoreScreen()));
-                                if (id != null) setState(() => _selectedStoreId = id);
-                              },
-                            )
-                          ],
-                        ),
-                        const SizedBox(height: 16),
-                        TextFormField(
-                          controller: _priceController,
-                          decoration: const InputDecoration(labelText: AppStrings.recordedPriceRequired, border: OutlineInputBorder()),
-                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                        ),
-                        const SizedBox(height: 16),
+            if (widget.isFastMode) ...[
+              const SizedBox(height: 24),
+              _buildSectionHeader('Rilevazione Prezzo', Icons.payments_outlined),
+              const SizedBox(height: 12),
+              Card(
+                elevation: 2,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                child: Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Column(
+                    children: [
+                      if (_selectedStoreId == null) ...[
                         DropdownButtonFormField<String>(
-                          decoration: const InputDecoration(labelText: AppStrings.promotionLabel, border: OutlineInputBorder()),
-                          value: _promoType,
-                          items: _promoTypes.map((pt) => DropdownMenuItem(value: pt, child: Text(pt))).toList(),
-                          onChanged: (val) => setState(() => _promoType = val),
+                          decoration: const InputDecoration(labelText: AppStrings.storeSelectionPrompt, border: OutlineInputBorder()),
+                          value: stores.any((s) => s.id == _selectedStoreId) ? _selectedStoreId : null,
+                          items: stores.map((s) => DropdownMenuItem(value: s.id, child: Text(s.name))).toList(),
+                          onChanged: (val) => setState(() => _selectedStoreId = val),
                         ),
-                        if (_promoType == AppStrings.promoDiscountPercent) ...[
+                        const SizedBox(height: 16),
+                      ],
+                      TextFormField(
+                        controller: _priceController,
+                        decoration: const InputDecoration(labelText: AppStrings.recordedPriceRequired, border: OutlineInputBorder()),
+                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ] else ...[
+              const SizedBox(height: 24),
+              // SEZIONE 2: RILEVAZIONE PREZZO
+              _buildSectionHeader(AppStrings.priceEntrySection, Icons.payments_outlined),
+              const SizedBox(height: 12),
+              Card(
+                elevation: 2,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                child: ExpansionTile(
+                  initiallyExpanded: widget.preselectedStoreId != null,
+                  title: const Text('Prezzo e Supermercato', style: TextStyle(fontWeight: FontWeight.bold)),
+                  subtitle: Text(_selectedStoreId != null ? 'Punto vendita selezionato' : 'Tocca per compilare'),
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.all(16.0),
+                      child: Column(
+                        children: [
+                          TextFormField(
+                            controller: _pricePerKgController,
+                            decoration: const InputDecoration(labelText: AppStrings.pricePerKgAuto, border: OutlineInputBorder()),
+                            readOnly: true,
+                          ),
+                          const SizedBox(height: 16),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: DropdownButtonFormField<String>(
+                                  decoration: const InputDecoration(labelText: AppStrings.storeSelectionPrompt, border: OutlineInputBorder()),
+                                  value: stores.any((s) => s.id == _selectedStoreId) ? _selectedStoreId : null,
+                                  items: stores.map((s) => DropdownMenuItem(value: s.id, child: Text(s.name))).toList(),
+                                  onChanged: (val) => setState(() => _selectedStoreId = val),
+                                ),
+                              ),
+                              IconButton(
+                                icon: const Icon(Icons.add_business, size: 30, color: Colors.indigo),
+                                onPressed: () async {
+                                  final id = await Navigator.push<String>(context, MaterialPageRoute(builder: (_) => const AddStoreScreen()));
+                                  if (id != null) setState(() => _selectedStoreId = id);
+                                },
+                              )
+                            ],
+                          ),
                           const SizedBox(height: 16),
                           TextFormField(
-                            controller: _discountPercentController,
-                            decoration: const InputDecoration(labelText: AppStrings.discountPercentLabel, border: OutlineInputBorder()),
-                            keyboardType: TextInputType.number,
+                            controller: _priceController,
+                            decoration: const InputDecoration(labelText: AppStrings.recordedPriceRequired, border: OutlineInputBorder()),
+                            keyboardType: const TextInputType.numberWithOptions(decimal: true),
                           ),
+                          const SizedBox(height: 16),
+                          DropdownButtonFormField<String>(
+                            decoration: const InputDecoration(labelText: AppStrings.promotionLabel, border: OutlineInputBorder()),
+                            value: _promoType,
+                            items: _promoTypes.map((pt) => DropdownMenuItem(value: pt, child: Text(pt))).toList(),
+                            onChanged: (val) => setState(() => _promoType = val),
+                          ),
+                          if (_promoType == AppStrings.promoDiscountPercent) ...[
+                            const SizedBox(height: 16),
+                            TextFormField(
+                              controller: _discountPercentController,
+                              decoration: const InputDecoration(labelText: AppStrings.discountPercentLabel, border: OutlineInputBorder()),
+                              keyboardType: TextInputType.number,
+                            ),
+                          ],
+                          if (_promoType != AppStrings.promoNone) _buildExpiryPicker(),
                         ],
-                        if (_promoType != AppStrings.promoNone) _buildExpiryPicker(),
-                      ],
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
+            ],
           ],
         ),
       ),
