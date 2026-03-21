@@ -210,6 +210,11 @@ class SpesAppDatabaseHelper {
     return null;
   }
 
+  Future<void> deleteProduct(String barcode) async {
+    final db = await instance.database;
+    await db.delete('products', where: 'barcode = ?', whereArgs: [barcode]);
+  }
+
   // --- METODI PER LE CATEGORIE ---
 
   /// Aggiunge o aggiorna una categoria nel database
