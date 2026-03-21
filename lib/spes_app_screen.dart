@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'spes_app/providers/cart_provider.dart';
+import 'spes_app/providers/store_provider.dart';
 import 'spes_app/screens/shopping_lists_screen.dart';
 import 'spes_app/screens/products_screen.dart';
 import 'spes_app/screens/stores_screen.dart';
@@ -8,6 +9,7 @@ import 'spes_app/screens/price_history_screen.dart';
 import 'spes_app/screens/current_shopping_screen.dart';
 import 'spes_app/screens/categories_screen.dart';
 import 'spes_app/screens/settings_screen.dart';
+import 'spes_app/screens/promotions_screen.dart';
 import 'spes_app/constants/app_strings.dart';
 
 /// Schermata principale dell'applicazione SpesApp.
@@ -52,6 +54,7 @@ class _SpesAppScreenState extends State<SpesAppScreen> {
                   icon: const Icon(Icons.delete_sweep),
                   onPressed: () {
                     ref.read(cartProvider.notifier).clear();
+                    ref.read(activeStoreIdProvider.notifier).setId(null);
                   },
                   tooltip: AppStrings.clearCartTooltip,
                 )
@@ -99,7 +102,15 @@ class _SpesAppScreenState extends State<SpesAppScreen> {
                   title: AppStrings.navCategorie,
                   onTap: () => _navigateTo(const CategoriesScreen()),
                 ),
-                const Divider(),
+                ListTile(
+                leading: const Icon(Icons.local_offer, color: Colors.blue),
+                title: const Text(AppStrings.navPromozioni),
+                onTap: () {
+                  Navigator.pop(context);
+                  Navigator.push(context, MaterialPageRoute(builder: (context) => const PromotionsScreen()));
+                },
+              ),
+              const Divider(),
                 _buildDrawerItem(
                   icon: Icons.settings,
                   title: AppStrings.navImpostazioni,
