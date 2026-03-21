@@ -17,6 +17,20 @@ class AppStrings {
   static const String navPuntiVendita = 'Punti Vendita';
   static const String navStorico = 'Storico Prezzi';
   static const String navCategorie = 'Categorie';
+  static const String navPromozioni = 'Promozioni';
+
+  // PromotionsScreen
+  static const String titlePromotions = 'Promozioni';
+  static const String subtitlePromotions = 'Gestisci le promo in corso per punto vendita';
+  static const String addPromotionTitle = 'Nuova Promozione';
+  static const String editPromotionTitle = 'Modifica Promozione';
+  static const String noPromotionsText = 'Nessuna promozione registrata.';
+  static const String validationNameRequired = 'Inserire il nome della promozione';
+  static const String validationStoreRequired = 'Selezionare un punto vendita';
+  static const String validationDateRequired = 'Inserire le date validità';
+  static const String discountLabel = 'Sconto (%)';
+  static const String validFromLabel = 'Valida dal:';
+  static const String validUntilLabel = 'Giorno di fine:';
 
   // ProductDetailScreen
   static const String editProduct = 'Modifica Prodotto';
