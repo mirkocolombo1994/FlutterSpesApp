@@ -6,6 +6,13 @@ class AppStrings {
   static const String drawerMenuTitle = 'SpesApp Menu';
   static const String navCassa = 'Cassa';
   static const String navListe = 'Liste';
+  static const String navHomePrincipale = 'Home Principale';
+  static const String navImpostazioni = 'Impostazioni';
+  static const String settingsTitle = 'Impostazioni';
+  static const String appVersionPrefix = 'Versione App:';
+  static const String themeModeLabel = 'Tema Scuro';
+  static const String aboutAppLabel = 'Informazioni App';
+  static const String aboutAppDescription = 'SpesApp - Gestione intelligente della spesa.\nSviluppato con Flutter.';
   static const String navProdotti = 'Prodotti';
   static const String navPuntiVendita = 'Punti Vendita';
   static const String navStorico = 'Storico Prezzi';

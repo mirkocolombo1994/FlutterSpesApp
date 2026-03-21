@@ -99,50 +99,54 @@ class ShoppingListsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final lists = ref.watch(shoppingListProvider);
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text(AppStrings.shoppingListsTitle),
-      ),
-      body: lists.isEmpty
-          ? const Center(child: Text(AppStrings.noListsFound))
-          : ListView.builder(
-              itemCount: lists.length,
-              itemBuilder: (context, index) {
-                final list = lists[index];
-                return Dismissible(
-                  key: Key(list.id),
-                  background: Container(color: Colors.red),
-                  onDismissed: (direction) {
-                    ref.read(shoppingListProvider.notifier).deleteList(list.id);
-                  },
-                  child: Card(
-                    margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                    child: ListTile(
-                      leading: Icon(
-                        list.type == ShoppingListType.superisparmio ? Icons.savings : Icons.list,
-                        color: Colors.indigo,
-                        size: 40,
+    return Stack(
+      children: [
+        lists.isEmpty
+            ? const Center(child: Text(AppStrings.noListsFound))
+            : ListView.builder(
+                itemCount: lists.length,
+                itemBuilder: (context, index) {
+                  final list = lists[index];
+                  return Dismissible(
+                    key: Key(list.id),
+                    background: Container(color: Colors.red),
+                    onDismissed: (direction) {
+                      ref.read(shoppingListProvider.notifier).deleteList(list.id);
+                    },
+                    child: Card(
+                      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      child: ListTile(
+                        leading: Icon(
+                          list.type == ShoppingListType.superisparmio ? Icons.savings : Icons.list,
+                          color: Colors.indigo,
+                          size: 40,
+                        ),
+                        title: Text(list.name, style: const TextStyle(fontWeight: FontWeight.bold)),
+                        subtitle: Text('${AppStrings.listTypePrefix} ${list.type.name.toUpperCase()}'),
+                        trailing: const Icon(Icons.chevron_right),
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => ShoppingListDetailScreen(shoppingList: list),
+                            ),
+                          );
+                        },
                       ),
-                      title: Text(list.name, style: const TextStyle(fontWeight: FontWeight.bold)),
-                      subtitle: Text('${AppStrings.listTypePrefix} ${list.type.name.toUpperCase()}'),
-                      trailing: const Icon(Icons.chevron_right),
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => ShoppingListDetailScreen(shoppingList: list),
-                          ),
-                        );
-                      },
                     ),
-                  ),
-                );
-              },
-            ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => _showCreateDialog(context, ref),
-        child: const Icon(Icons.add),
-      ),
+                  );
+                },
+              ),
+        Positioned(
+          bottom: 16,
+          right: 16,
+          child: FloatingActionButton(
+            heroTag: 'add_list_fab',
+            onPressed: () => _showCreateDialog(context, ref),
+            child: const Icon(Icons.add),
+          ),
+        ),
+      ],
     );
   }
 }
