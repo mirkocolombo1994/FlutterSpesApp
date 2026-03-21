@@ -19,8 +19,14 @@ import '../constants/app_strings.dart';
 class AddProductScreen extends ConsumerStatefulWidget {
   final String? initialBarcode;
   final String? preselectedStoreId;
+  final bool isFastMode;
 
-  const AddProductScreen({super.key, this.initialBarcode, this.preselectedStoreId});
+  const AddProductScreen({
+    super.key, 
+    this.initialBarcode, 
+    this.preselectedStoreId,
+    this.isFastMode = false,
+  });
 
   @override
   ConsumerState<AddProductScreen> createState() => _AddProductScreenState();
@@ -324,47 +330,51 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
                     ),
                     const SizedBox(height: 16),
                     // Foto
-                    Center(
-                      child: Stack(
-                        children: [
-                          Container(
-                            width: 100,
-                            height: 100,
-                            decoration: BoxDecoration(
-                              color: Colors.grey.shade100,
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: Colors.grey.shade300),
+                    if (!widget.isFastMode) ...[
+                      Center(
+                        child: Stack(
+                          children: [
+                            Container(
+                              width: 100,
+                              height: 100,
+                              decoration: BoxDecoration(
+                                color: Colors.grey.shade100,
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: Colors.grey.shade300),
+                              ),
+                              child: _imageFile != null
+                                  ? ClipRRect(
+                                      borderRadius: BorderRadius.circular(12),
+                                      child: Image.file(_imageFile!, fit: BoxFit.cover),
+                                    )
+                                  : const Icon(Icons.add_a_photo, size: 40, color: Colors.grey),
                             ),
-                            child: _imageFile != null
-                                ? ClipRRect(
-                                    borderRadius: BorderRadius.circular(12),
-                                    child: Image.file(_imageFile!, fit: BoxFit.cover),
-                                  )
-                                : const Icon(Icons.add_a_photo, size: 40, color: Colors.grey),
-                          ),
-                          Positioned(bottom: 0, right: 0, child: _buildImageAction(Icons.camera_alt, () => _pickImage(ImageSource.camera))),
-                          Positioned(bottom: 0, left: 0, child: _buildImageAction(Icons.photo_library, () => _pickImage(ImageSource.gallery))),
-                        ],
+                            Positioned(bottom: 0, right: 0, child: _buildImageAction(Icons.camera_alt, () => _pickImage(ImageSource.camera))),
+                            Positioned(bottom: 0, left: 0, child: _buildImageAction(Icons.photo_library, () => _pickImage(ImageSource.gallery))),
+                          ],
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 16),
+                      const SizedBox(height: 16),
+                    ],
                     TextFormField(
                       controller: _nameController,
                       decoration: const InputDecoration(labelText: AppStrings.productNameRequired, border: OutlineInputBorder()),
                       validator: (value) => value == null || value.isEmpty ? AppStrings.productNameValidator : null,
                     ),
                     const SizedBox(height: 16),
-                    Consumer(builder: (context, ref, child) {
-                      final categories = ref.watch(categoryProvider);
-                      return DropdownButtonFormField<String>(
-                        decoration: const InputDecoration(labelText: AppStrings.categoryLabel, border: OutlineInputBorder()),
-                        value: categories.any((c) => c.name == _selectedCategory) ? _selectedCategory : null,
-                        items: categories.map((c) => DropdownMenuItem(value: c.name, child: Text(c.name))).toList(),
-                        onChanged: (val) => setState(() => _selectedCategory = val),
-                        hint: const Text(AppStrings.selectCategoryHint),
-                      );
-                    }),
-                    const SizedBox(height: 16),
+                    if (!widget.isFastMode) ...[
+                      Consumer(builder: (context, ref, child) {
+                        final categories = ref.watch(categoryProvider);
+                        return DropdownButtonFormField<String>(
+                          decoration: const InputDecoration(labelText: AppStrings.categoryLabel, border: OutlineInputBorder()),
+                          value: categories.any((c) => c.name == _selectedCategory) ? _selectedCategory : null,
+                          items: categories.map((c) => DropdownMenuItem(value: c.name, child: Text(c.name))).toList(),
+                          onChanged: (val) => setState(() => _selectedCategory = val),
+                          hint: const Text(AppStrings.selectCategoryHint),
+                        );
+                      }),
+                      const SizedBox(height: 16),
+                    ],
                     TextFormField(
                       controller: _brandController,
                       decoration: const InputDecoration(labelText: AppStrings.brandLabel, border: OutlineInputBorder()),

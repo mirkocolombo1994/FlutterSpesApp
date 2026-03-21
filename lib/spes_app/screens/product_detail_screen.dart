@@ -31,6 +31,8 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
   late TextEditingController _nameController;
   late TextEditingController _categoryController;
   late TextEditingController _brandController;
+  late TextEditingController _weightController;
+  String? _weightUnit;
   
   List<PriceHistory> _history = [];
   bool _isLoadingHistory = true;
@@ -41,6 +43,8 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
     _nameController = TextEditingController(text: widget.product.name);
     _categoryController = TextEditingController(text: widget.product.category ?? '');
     _brandController = TextEditingController(text: widget.product.brand ?? '');
+    _weightController = TextEditingController(text: widget.product.weight?.toString() ?? '');
+    _weightUnit = widget.product.weightUnit ?? AppStrings.unitKg;
     _loadPriceHistory();
   }
 
@@ -49,6 +53,7 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
     _nameController.dispose();
     _categoryController.dispose();
     _brandController.dispose();
+    _weightController.dispose();
     super.dispose();
   }
 
@@ -70,8 +75,8 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
       name: _nameController.text.trim(),
       description: widget.product.description,
       brand: _brandController.text.trim(),
-      weight: widget.product.weight,
-      weightUnit: widget.product.weightUnit,
+      weight: double.tryParse(_weightController.text.replaceAll(',', '.')),
+      weightUnit: _weightUnit,
       imageUrl: widget.product.imageUrl,
       category: _categoryController.text.trim().isEmpty ? null : _categoryController.text.trim(),
       pricePerKg: widget.product.pricePerKg,
@@ -129,6 +134,8 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
                   _nameController.text = product.name;
                   _categoryController.text = product.category ?? '';
                   _brandController.text = product.brand ?? '';
+                  _weightController.text = product.weight?.toString() ?? '';
+                  _weightUnit = product.weightUnit ?? AppStrings.unitKg;
                 });
               },
             ),
@@ -274,6 +281,37 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
   }
 
   Widget _buildDetailsSection(Product product) {
+    if (_isEditing) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildSectionHeader(AppStrings.technicalDetails),
+          _buildInfoRow(Icons.qr_code_scanner, AppStrings.barcodeLabel, product.barcode),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _weightController,
+                  decoration: const InputDecoration(labelText: AppStrings.weightLabel, border: OutlineInputBorder()),
+                  keyboardType: TextInputType.number,
+                ),
+              ),
+              const SizedBox(width: 12),
+              DropdownButton<String>(
+                value: _weightUnit,
+                items: [AppStrings.unitKg, AppStrings.unitG, AppStrings.unitL, AppStrings.unitMl, AppStrings.unitPz]
+                    .map((u) => DropdownMenuItem(value: u, child: Text(u))).toList(),
+                onChanged: (val) {
+                  setState(() => _weightUnit = val);
+                },
+              )
+            ],
+          ),
+        ],
+      );
+    }
+    
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [

@@ -22,6 +22,23 @@ class CurrentShoppingScreen extends ConsumerStatefulWidget {
 
 class _CurrentShoppingScreenState extends ConsumerState<CurrentShoppingScreen> {
 
+  bool _gpsFetched = false;
+
+  @override
+  void initState() {
+    super.initState();
+    Future.microtask(() {
+      if (ref.read(activeStoreIdProvider) == null && !_gpsFetched) {
+        _gpsFetched = true;
+        _fetchGpsAndStore(ref).then((storeId) {
+          if (storeId != null && mounted) {
+            ref.read(activeStoreIdProvider.notifier).setId(storeId);
+          }
+        });
+      }
+    });
+  }
+
   Future<String?> _fetchGpsAndStore(WidgetRef ref) async {
     try {
       if (!await Geolocator.isLocationServiceEnabled()) return null;
@@ -194,9 +211,25 @@ class _CurrentShoppingScreenState extends ConsumerState<CurrentShoppingScreen> {
                             ),
                         ],
                       ),
-                      trailing: IconButton(
-                        icon: const Icon(Icons.remove_circle, color: Colors.red),
-                        onPressed: () => ref.read(cartProvider.notifier).removeItem(item.id),
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          IconButton(
+                            icon: const Icon(Icons.remove_circle_outline, color: Colors.indigo),
+                            onPressed: item.quantity > 1 
+                                ? () => ref.read(cartProvider.notifier).updateQuantity(item.id, item.quantity - 1)
+                                : null,
+                          ),
+                          Text('${item.quantity}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                          IconButton(
+                            icon: const Icon(Icons.add_circle_outline, color: Colors.indigo),
+                            onPressed: () => ref.read(cartProvider.notifier).updateQuantity(item.id, item.quantity + 1),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.delete, color: Colors.red),
+                            onPressed: () => ref.read(cartProvider.notifier).removeItem(item.id),
+                          ),
+                        ],
                       ),
                     );
                   },
@@ -253,7 +286,7 @@ class _CurrentShoppingScreenState extends ConsumerState<CurrentShoppingScreen> {
                 } else {
                   final result = await Navigator.push(
                     context,
-                    MaterialPageRoute(builder: (context) => AddProductScreen(initialBarcode: scannedCode, preselectedStoreId: ref.read(activeStoreIdProvider))),
+                    MaterialPageRoute(builder: (context) => AddProductScreen(initialBarcode: scannedCode, preselectedStoreId: ref.read(activeStoreIdProvider), isFastMode: true)),
                   );
                   if (result != null && result is String) {
                     finalBarcodeToAdd = result;

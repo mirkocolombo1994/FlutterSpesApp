@@ -4,6 +4,7 @@ import '../models/store.dart';
 import '../models/product.dart';
 import '../models/price_history.dart';
 import '../models/category.dart';
+import '../models/promotion.dart';
 import '../models/shopping_list.dart';
 import '../models/shopping_list_item.dart';
 
@@ -25,7 +26,7 @@ class SpesAppDatabaseHelper {
 
     return await openDatabase(
       path,
-      version: 6,
+      version: 7,
       onCreate: _createDB,
       onUpgrade: _upgradeDB,
       onConfigure: (db) async {
@@ -63,6 +64,22 @@ class SpesAppDatabaseHelper {
         ''');
       } catch (_) {}
     }
+    if (oldVersion < 7) {
+      try {
+        await db.execute('''
+          CREATE TABLE promotions (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            description TEXT,
+            discount_percentage REAL,
+            store_id TEXT NOT NULL,
+            valid_from INTEGER,
+            valid_until INTEGER,
+            FOREIGN KEY (store_id) REFERENCES stores (id) ON DELETE CASCADE
+          )
+        ''');
+      } catch (_) {}
+    }
   }
 
   Future _createDB(Database db, int version) async {
@@ -82,6 +99,19 @@ class SpesAppDatabaseHelper {
       CREATE TABLE categories (
         id TEXT PRIMARY KEY,
         name TEXT NOT NULL
+      )
+    ''');
+
+    await db.execute('''
+      CREATE TABLE promotions (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        description TEXT,
+        discount_percentage REAL,
+        store_id TEXT NOT NULL,
+        valid_from INTEGER,
+        valid_until INTEGER,
+        FOREIGN KEY (store_id) REFERENCES stores (id) ON DELETE CASCADE
       )
     ''');
     
@@ -234,6 +264,23 @@ class SpesAppDatabaseHelper {
   Future<void> deleteCategory(String id) async {
     final db = await instance.database;
     await db.delete('categories', where: 'id = ?', whereArgs: [id]);
+  }
+
+  // --- PROMOTIONS METHODS ---
+  Future<void> insertPromotion(Promotion promotion) async {
+    final db = await instance.database;
+    await db.insert('promotions', promotion.toMap(), conflictAlgorithm: ConflictAlgorithm.replace);
+  }
+
+  Future<List<Promotion>> getPromotions() async {
+    final db = await instance.database;
+    final result = await db.query('promotions');
+    return result.map((json) => Promotion.fromMap(json)).toList();
+  }
+
+  Future<void> deletePromotion(String id) async {
+    final db = await instance.database;
+    await db.delete('promotions', where: 'id = ?', whereArgs: [id]);
   }
 
   // --- PRICE HISTORY METHODS ---
