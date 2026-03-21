@@ -434,6 +434,19 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
                         decoration: const InputDecoration(labelText: AppStrings.recordedPriceRequired, border: OutlineInputBorder()),
                         keyboardType: const TextInputType.numberWithOptions(decimal: true),
                       ),
+                      const SizedBox(height: 8),
+                      SwitchListTile(
+                        title: const Text('Prezzo in Promozione?'),
+                        subtitle: const Text('Potrai specificare i dettagli in seguito', style: TextStyle(fontSize: 11)),
+                        value: _promoType != AppStrings.promoNone,
+                        onChanged: (val) {
+                          setState(() {
+                            _promoType = val ? AppStrings.promoOther : AppStrings.promoNone;
+                          });
+                        },
+                        contentPadding: EdgeInsets.zero,
+                        activeColor: Colors.indigo,
+                      ),
                     ],
                   ),
                 ),
