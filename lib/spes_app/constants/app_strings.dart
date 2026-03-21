@@ -60,8 +60,19 @@ class AppStrings {
   static const String autoSetStore = '. Supermercato auto-impostato!';
   static const String newFreshProductAlert = '🏷️ Nuovo prodotto fresco! Memorizzalo. Prezzo estratto!';
   static const String selectStoreAndPriceWarning = 'Seleziona il punto vendita in cui ti trovi e il prezzo!';
+  static const String productDataSection = 'Dati Prodotto';
+  static const String priceEntrySection = 'Rilevazione Prezzo (Opzionale)';
 
   // ProductsScreen
+  static const String myProductsTitle = 'I Miei Prodotti';
+  static const String noSearchResults = 'Nessun prodotto trovato per la ricerca';
+  static const String noProductsRegistered = 'Nessun prodotto censito';
+  static const String deleteProductTitle = 'Elimina Prodotto';
+  static const String deleteProductConfirmPrefix = 'Sei sicuro di voler eliminare "';
+  static const String deleteProductConfirmSuffix = '"?';
+  static const String sortAlphabetical = 'Alfabeticamente';
+  static const String sortCategory = 'Per Categoria';
+  static const String unknownCategory = 'Senza Categoria';
   static const String searchProductsHint = 'Cerca prodotti...';
   static const String noProductsFound = 'Nessun prodotto trovato.';
 

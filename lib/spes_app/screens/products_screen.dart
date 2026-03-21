@@ -55,12 +55,12 @@ class _ProductsScreenState extends ConsumerState<ProductsScreen> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Elimina Prodotto'),
-        content: Text('Sei sicuro di voler eliminare "${product.name}"?'),
+        title: const Text(AppStrings.deleteProductTitle),
+        content: Text('${AppStrings.deleteProductConfirmPrefix}${product.name}${AppStrings.deleteProductConfirmSuffix}'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('Annulla'),
+            child: const Text(AppStrings.cancel),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
@@ -68,7 +68,7 @@ class _ProductsScreenState extends ConsumerState<ProductsScreen> {
               ref.read(productProvider.notifier).deleteProduct(product.barcode);
               Navigator.pop(ctx);
             },
-            child: const Text('Elimina', style: TextStyle(color: Colors.white)),
+            child: const Text(AppStrings.confirmAction, style: TextStyle(color: Colors.white)),
           ),
         ],
       ),
@@ -87,7 +87,7 @@ class _ProductsScreenState extends ConsumerState<ProductsScreen> {
                 controller: _searchController,
                 autofocus: true,
                 decoration: const InputDecoration(
-                  hintText: 'Cerca per nome, marca o barcode...',
+                  hintText: AppStrings.searchProductsHint,
                   border: InputBorder.none,
                   hintStyle: TextStyle(color: Colors.white70),
                 ),
@@ -98,7 +98,7 @@ class _ProductsScreenState extends ConsumerState<ProductsScreen> {
                   });
                 },
               )
-            : const Text('I Miei Prodotti'),
+            : const Text(AppStrings.myProductsTitle),
         actions: [
           IconButton(
             icon: Icon(_isSearching ? Icons.close : Icons.search),
@@ -126,7 +126,7 @@ class _ProductsScreenState extends ConsumerState<ProductsScreen> {
                   children: [
                     Icon(Icons.sort_by_alpha, size: 20),
                     SizedBox(width: 8),
-                    Text('Alfabeticamente'),
+                    Text(AppStrings.sortAlphabetical),
                   ],
                 ),
               ),
@@ -136,7 +136,7 @@ class _ProductsScreenState extends ConsumerState<ProductsScreen> {
                   children: [
                     Icon(Icons.category, size: 20),
                     SizedBox(width: 8),
-                    Text('Per Categoria'),
+                    Text(AppStrings.sortCategory),
                   ],
                 ),
               ),
@@ -153,8 +153,8 @@ class _ProductsScreenState extends ConsumerState<ProductsScreen> {
                   const SizedBox(height: 16),
                   Text(
                     _searchQuery.isNotEmpty 
-                        ? 'Nessun prodotto trovato per la ricerca' 
-                        : 'Nessun prodotto censito',
+                        ? AppStrings.noSearchResults 
+                        : AppStrings.noProductsRegistered,
                     style: TextStyle(color: Colors.grey.shade600, fontSize: 16),
                   ),
                 ],
@@ -181,7 +181,7 @@ class _ProductsScreenState extends ConsumerState<ProductsScreen> {
                       Padding(
                         padding: const EdgeInsets.only(left: 16, top: 16, bottom: 8),
                         child: Text(
-                          (product.category ?? 'Senza Categoria').toUpperCase(),
+                          (product.category ?? AppStrings.unknownCategory).toUpperCase(),
                           style: TextStyle(
                             fontSize: 13,
                             fontWeight: FontWeight.bold,
@@ -287,7 +287,7 @@ class _ProductsScreenState extends ConsumerState<ProductsScreen> {
           );
         },
         icon: const Icon(Icons.add),
-        label: const Text('Nuovo Prodotto'),
+        label: const Text(AppStrings.newProduct),
       ),
     );
   }
