@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 import 'barcode_scanner_screen.dart';
 import 'add_product_screen.dart';
+import '../models/price_history.dart';
 import '../providers/cart_provider.dart';
 import '../providers/product_provider.dart';
 import '../providers/price_history_provider.dart';
@@ -274,9 +275,81 @@ class _CurrentShoppingScreenState extends ConsumerState<CurrentShoppingScreen> {
                 final products = ref.read(productProvider);
                 final existingProduct = products.where((p) => p.barcode == scannedCode).firstOrNull;
                 String? finalBarcodeToAdd;
+                
                 if (existingProduct != null) {
-                  finalBarcodeToAdd = scannedCode;
-                  if (mounted) {
+                  final currentStoreId = ref.read(activeStoreIdProvider);
+                  bool handled = false;
+                  
+                  if (currentStoreId != null) {
+                    final history = await ref.read(priceHistoryProvider).getHistoryForProduct(scannedCode);
+                    final storeHistory = history.where((h) => h.storeId == currentStoreId).firstOrNull;
+                    
+                    if (storeHistory != null) {
+                      final historyDate = DateTime.fromMillisecondsSinceEpoch(storeHistory.timestamp);
+                      final now = DateTime.now();
+                      bool isSameDay = historyDate.year == now.year && historyDate.month == now.month && historyDate.day == now.day;
+                      
+                      if (!isSameDay) {
+                        if (mounted) {
+                          final bool? confirmed = await showDialog<bool>(
+                            context: context,
+                            builder: (context) => AlertDialog(
+                              title: const Text(AppStrings.priceValidationTitle),
+                              content: Text('${AppStrings.priceValidationMessage}${storeHistory.price.toStringAsFixed(2)}${AppStrings.priceValidationQuestion}'),
+                              actions: [
+                                TextButton(
+                                  onPressed: () => Navigator.pop(context, false),
+                                  child: const Text(AppStrings.priceChanged),
+                                ),
+                                ElevatedButton(
+                                  onPressed: () => Navigator.pop(context, true),
+                                  child: const Text(AppStrings.priceConfirmed),
+                                ),
+                              ],
+                            ),
+                          );
+                          
+                          if (confirmed == true) {
+                            await ref.read(priceHistoryProvider).addPriceHistory(PriceHistory(
+                              id: const Uuid().v4(),
+                              productBarcode: scannedCode,
+                              storeId: currentStoreId,
+                              price: storeHistory.price,
+                              timestamp: now.millisecondsSinceEpoch,
+                              promoType: storeHistory.promoType,
+                              promoValidUntil: storeHistory.promoValidUntil,
+                            ));
+                            finalBarcodeToAdd = scannedCode;
+                            handled = true;
+                          } else if (confirmed == false) {
+                            // Leave handled = false to trigger AddProductScreen below
+                          } else {
+                            handled = true; // Dismissed
+                          }
+                        } else {
+                           handled = true;
+                        }
+                      } else {
+                        // Already checked today
+                        finalBarcodeToAdd = scannedCode;
+                        handled = true;
+                      }
+                    }
+                  }
+                  
+                  if (!handled) {
+                    if (mounted) {
+                      final result = await Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (context) => AddProductScreen(initialBarcode: scannedCode, preselectedStoreId: currentStoreId, isFastMode: true)),
+                      );
+                      if (result != null && result is String) {
+                        finalBarcodeToAdd = result;
+                      }
+                    }
+                  }
+                  
+                  if (finalBarcodeToAdd != null && mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
                       content: Text('${AppStrings.addedSuccess} ${existingProduct.name}'),
                       backgroundColor: Colors.green,

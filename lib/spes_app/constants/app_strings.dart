@@ -157,6 +157,11 @@ class AppStrings {
   static const String unknownProduct = 'Prodotto sconosciuto';
   static const String pricePerUnit = '€ cad.';
   static const String freshIndicatorLabel = 'Fresco';
+  static const String priceValidationTitle = 'Verifica Prezzo';
+  static const String priceValidationMessage = 'Il prezzo registrato è €';
+  static const String priceValidationQuestion = '. È ancora lo stesso?';
+  static const String priceConfirmed = 'Sì, Confermato';
+  static const String priceChanged = 'No, è cambiato';
 
   // ShoppingListsScreen
   static const String shoppingListsTitle = 'Le mie Liste Spesa';
