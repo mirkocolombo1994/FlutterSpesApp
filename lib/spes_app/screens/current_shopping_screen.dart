@@ -176,14 +176,16 @@ class _CurrentShoppingScreenState extends ConsumerState<CurrentShoppingScreen> {
                         children: [
                           Expanded(child: Text(item.name, style: const TextStyle(fontWeight: FontWeight.bold))),
                           if (item.status == CartItemStatus.warning)
-                             const Tooltip(
+                             Tooltip(
                                message: AppStrings.priceMissingInStore,
-                               child: Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 20),
+                               triggerMode: TooltipTriggerMode.tap,
+                               child: const Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 20),
                              ),
                           if (item.status == CartItemStatus.error)
-                             const Tooltip(
+                             Tooltip(
                                message: AppStrings.productNotIndexedInStore,
-                               child: Icon(Icons.error_outline, color: Colors.red, size: 20),
+                               triggerMode: TooltipTriggerMode.tap,
+                               child: const Icon(Icons.error_outline, color: Colors.red, size: 20),
                              ),
                           if (item.promoType != null)
                             Container(
