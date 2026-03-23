@@ -96,16 +96,15 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // IMPORTANTE: Ascoltiamo la lista dei prodotti dal provider.
-    // In questo modo, se il prodotto viene aggiornato, UI reagisce immediatamente.
+    // Watch providers at the top level
     final products = ref.watch(productProvider);
+    final categories = ref.watch(categoryProvider);
+    final stores = ref.watch(storeProvider);
+
     final product = products.firstWhere(
       (p) => p.barcode == widget.product.barcode,
-      orElse: () => widget.product, // Fallback se non trovato
+      orElse: () => widget.product,
     );
-
-    // Watch stores for mapping names in the table
-    final stores = ref.watch(storeProvider);
     
     // Group history by store to get latest price
     final latestPrices = <String, PriceHistory>{};
@@ -158,7 +157,7 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _buildMainInfo(product),
+                  _buildMainInfo(product, categories),
                   const SizedBox(height: 24),
                   
                   // Product Info Section
@@ -212,18 +211,20 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
     }
   }
 
-  Widget _buildMainInfo(Product product) {
+  Widget _buildMainInfo(Product product, List<Category> categories) {
     if (_isEditing) {
-      final categories = ref.watch(categoryProvider);
       
       return Column(
         children: [
           TextField(
+            key: const ValueKey('edit_name_field'),
             controller: _nameController,
             decoration: const InputDecoration(labelText: AppStrings.nameLabel, border: OutlineInputBorder()),
+            onTapOutside: (_) => FocusScope.of(context).unfocus(),
           ),
           const SizedBox(height: 12),
           DropdownButtonFormField<String>(
+            key: const ValueKey('edit_category_dropdown'),
             value: categories.any((c) => c.name == _categoryController.text) 
                 ? _categoryController.text 
                 : null,
@@ -238,8 +239,10 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
           ),
           const SizedBox(height: 12),
           TextField(
+            key: const ValueKey('edit_brand_field'),
             controller: _brandController,
             decoration: const InputDecoration(labelText: AppStrings.brandLabel, border: OutlineInputBorder()),
+            onTapOutside: (_) => FocusScope.of(context).unfocus(),
           ),
         ],
       );
@@ -292,9 +295,11 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
             children: [
               Expanded(
                 child: TextField(
+                  key: const ValueKey('edit_weight_field'),
                   controller: _weightController,
                   decoration: const InputDecoration(labelText: AppStrings.weightLabel, border: OutlineInputBorder()),
                   keyboardType: TextInputType.number,
+                  onTapOutside: (_) => FocusScope.of(context).unfocus(),
                 ),
               ),
               const SizedBox(width: 12),
