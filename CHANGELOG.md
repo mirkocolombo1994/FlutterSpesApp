@@ -1,5 +1,31 @@
 # Registro delle Modifiche (Changelog)
 
+### [0.2.4](https://github.com/mirkocolombo1994/FlutterSpesApp/compare/v0.2.3...v0.2.4) (2026-03-24)
+
+
+### 📚 Documentazione
+
+* updated readme ([021c243](https://github.com/mirkocolombo1994/FlutterSpesApp/commit/021c243f98118a27a6d42bbbddf3a8dfb57ba962))
+
+
+### ✅ Test
+
+* added tests ([93a2b08](https://github.com/mirkocolombo1994/FlutterSpesApp/commit/93a2b08e402187378e5f95967475d37b6f8c0b58))
+
+
+### ⚙️ Manutenzione
+
+* added DevOps pipeline for testing and releases ([1f0646e](https://github.com/mirkocolombo1994/FlutterSpesApp/commit/1f0646ec45e0a04b3e04a977b8086a25a7a1d413))
+
+
+### 🐛 Bug Fixes
+
+* fix errors on tests ([6d211df](https://github.com/mirkocolombo1994/FlutterSpesApp/commit/6d211dffbe4de04f5717a9bb11847ad425e322a8))
+* fix test node.js version ([7f14cb6](https://github.com/mirkocolombo1994/FlutterSpesApp/commit/7f14cb6705aa4ca6b3091f5cd1e92bb550b6a9c8))
+* fixed tests ([bcf5a0f](https://github.com/mirkocolombo1994/FlutterSpesApp/commit/bcf5a0f6b4bee894d49ea9610cf98b3c396bec53))
+* flutter version for tests ([01ab274](https://github.com/mirkocolombo1994/FlutterSpesApp/commit/01ab274f8d3840d56fc1dcd883d6f7f30a59d726))
+* stabilized product detail textfields to fix selection bug ([7c5cb75](https://github.com/mirkocolombo1994/FlutterSpesApp/commit/7c5cb75253347604098d61663d44f3813b7b88fa))
+
 ### [0.2.3](https://github.com/mirkocolombo1994/FlutterSpesApp/compare/v0.2.2...v0.2.3) (2026-03-23)
 
 
