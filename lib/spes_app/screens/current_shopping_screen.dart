@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 import 'barcode_scanner_screen.dart';
 import 'add_product_screen.dart';
+import '../models/price_history.dart';
 import '../providers/cart_provider.dart';
 import '../providers/product_provider.dart';
 import '../providers/price_history_provider.dart';
@@ -21,6 +22,23 @@ class CurrentShoppingScreen extends ConsumerStatefulWidget {
 }
 
 class _CurrentShoppingScreenState extends ConsumerState<CurrentShoppingScreen> {
+
+  bool _gpsFetched = false;
+
+  @override
+  void initState() {
+    super.initState();
+    Future.microtask(() {
+      if (ref.read(activeStoreIdProvider) == null && !_gpsFetched) {
+        _gpsFetched = true;
+        _fetchGpsAndStore(ref).then((storeId) {
+          if (storeId != null && mounted) {
+            ref.read(activeStoreIdProvider.notifier).setId(storeId);
+          }
+        });
+      }
+    });
+  }
 
   Future<String?> _fetchGpsAndStore(WidgetRef ref) async {
     try {
@@ -83,246 +101,303 @@ class _CurrentShoppingScreenState extends ConsumerState<CurrentShoppingScreen> {
     final stores = ref.watch(storeProvider);
     final currentStore = stores.where((s) => s.id == activeStoreId).firstOrNull;
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text(AppStrings.currentShoppingTitle),
-        actions: [
-          if (cartItems.isNotEmpty)
-            IconButton(
-              icon: const Icon(Icons.delete_sweep),
-              onPressed: () {
-                ref.read(cartProvider.notifier).clear();
-              },
-              tooltip: AppStrings.clearCartTooltip,
-            )
-        ],
-      ),
-      body: Column(
-        children: [
-          // Selettore Punto Vendita
-          Container(
-            padding: const EdgeInsets.all(12),
-            color: Colors.indigo.shade100.withOpacity(0.3),
-            child: Row(
-              children: [
-                const Icon(Icons.location_on, color: Colors.indigo),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(AppStrings.storeSelectorLabel, style: TextStyle(fontSize: 12, color: Colors.indigo)),
-                      Text(
-                        currentStore?.name ?? AppStrings.storeNotDetected,
-                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                      ),
-                    ],
-                  ),
-                ),
-                TextButton.icon(
-                  onPressed: () => _showStoreSelector(context, ref, stores),
-                  icon: const Icon(Icons.edit_location_alt, size: 18),
-                  label: const Text(AppStrings.changeStore),
-                ),
-              ],
-            ),
-          ),
-          Expanded(
-            child: cartItems.isEmpty
-                ? const Center(child: Padding(
-                    padding: EdgeInsets.all(32.0),
-                    child: Text(
-                      AppStrings.emptyCart,
-                      textAlign: TextAlign.center,
-                      style: TextStyle(fontSize: 16, color: Colors.grey),
+    return Column(
+      children: [
+        // Selettore Punto Vendita
+        Container(
+          padding: const EdgeInsets.all(12),
+          color: Colors.indigo.shade100.withOpacity(0.3),
+          child: Row(
+            children: [
+              const Icon(Icons.location_on, color: Colors.indigo),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(AppStrings.storeSelectorLabel, style: TextStyle(fontSize: 12, color: Colors.indigo)),
+                    Text(
+                      currentStore?.name ?? AppStrings.storeNotDetected,
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                     ),
-                  ))
-                : ListView.builder(
-                    itemCount: cartItems.length,
-                    itemBuilder: (context, index) {
-                      final item = cartItems[index];
-                      final isFresh = item.barcode.length == 7 && item.barcode.startsWith('2');
-                      
-                      return ListTile(
-                        leading: item.imageUrl != null && File(item.imageUrl!).existsSync()
-                          ? Container(
-                              width: 48,
-                              height: 48,
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(8),
-                                image: DecorationImage(
-                                  image: FileImage(File(item.imageUrl!)),
-                                  fit: BoxFit.cover,
-                                ),
-                              ),
-                              child: Align(
-                                alignment: Alignment.bottomRight,
-                                child: Container(
-                                  padding: const EdgeInsets.all(2),
-                                  decoration: const BoxDecoration(color: Colors.white70, shape: BoxShape.circle),
-                                  child: Text('${item.quantity}x', style: const TextStyle(color: Colors.indigo, fontWeight: FontWeight.bold, fontSize: 10)),
-                                ),
-                              ),
-                            )
-                          : CircleAvatar(
-                              backgroundColor: Colors.indigo.shade100,
-                              child: Text('${item.quantity}x', style: const TextStyle(color: Colors.indigo, fontWeight: FontWeight.bold, fontSize: 13)),
-                            ),
-                        title: Row(
-                          children: [
-                            Expanded(child: Text(item.name, style: const TextStyle(fontWeight: FontWeight.bold))),
-                            if (item.status == CartItemStatus.warning)
-                               const Tooltip(
-                                 message: AppStrings.priceMissingInStore,
-                                 child: Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 20),
-                               ),
-                            if (item.status == CartItemStatus.error)
-                               const Tooltip(
-                                 message: AppStrings.productNotIndexedInStore,
-                                 child: Icon(Icons.error_outline, color: Colors.red, size: 20),
-                               ),
-                            if (item.promoType != null)
-                              Container(
-                                margin: const EdgeInsets.only(left: 8),
-                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                decoration: BoxDecoration(
-                                  color: Colors.orange.shade100,
-                                  borderRadius: BorderRadius.circular(4),
-                                  border: Border.all(color: Colors.orange),
-                                ),
-                                child: Text(
-                                  item.promoType!,
-                                  style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.orange),
-                                ),
-                              ),
-                          ],
-                        ),
-                        subtitle: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(isFresh ? '${AppStrings.freshIndicatorLabel} - €${item.price.toStringAsFixed(2)}' : '€${item.price.toStringAsFixed(2)} ${AppStrings.pricePerUnit}'),
-                            if (item.unitPrice != null && item.unitPrice! > 0)
-                              Text(
-                                '(${item.unitPrice!.toStringAsFixed(2)} €/unità)',
-                                style: TextStyle(fontSize: 11, color: Colors.grey.shade600, fontStyle: FontStyle.italic),
-                              ),
-                          ],
-                        ),
-                        trailing: IconButton(
-                          icon: const Icon(Icons.remove_circle, color: Colors.red),
-                          onPressed: () => ref.read(cartProvider.notifier).removeItem(item.id),
-                        ),
-                      );
-                    },
+                  ],
+                ),
+              ),
+              TextButton.icon(
+                onPressed: () => _showStoreSelector(context, ref, stores),
+                icon: const Icon(Icons.edit_location_alt, size: 18),
+                label: const Text(AppStrings.changeStore),
+              ),
+            ],
+          ),
+        ),
+        Expanded(
+          child: cartItems.isEmpty
+              ? const Center(child: Padding(
+                  padding: EdgeInsets.all(32.0),
+                  child: Text(
+                    AppStrings.emptyCart,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(fontSize: 16, color: Colors.grey),
                   ),
+                ))
+              : ListView.builder(
+                  itemCount: cartItems.length,
+                  itemBuilder: (context, index) {
+                    final item = cartItems[index];
+                    final isFresh = item.barcode.length == 7 && item.barcode.startsWith('2');
+                    
+                    return ListTile(
+                      leading: item.imageUrl != null && File(item.imageUrl!).existsSync()
+                        ? Container(
+                            width: 48,
+                            height: 48,
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(8),
+                              image: DecorationImage(
+                                image: FileImage(File(item.imageUrl!)),
+                                fit: BoxFit.cover,
+                              ),
+                            ),
+                            child: Align(
+                              alignment: Alignment.bottomRight,
+                              child: Container(
+                                padding: const EdgeInsets.all(2),
+                                decoration: const BoxDecoration(color: Colors.white70, shape: BoxShape.circle),
+                                child: Text('${item.quantity}x', style: const TextStyle(color: Colors.indigo, fontWeight: FontWeight.bold, fontSize: 10)),
+                              ),
+                            ),
+                          )
+                        : CircleAvatar(
+                            backgroundColor: Colors.indigo.shade100,
+                            child: Text('${item.quantity}x', style: const TextStyle(color: Colors.indigo, fontWeight: FontWeight.bold, fontSize: 13)),
+                          ),
+                      title: Row(
+                        children: [
+                          Expanded(child: Text(item.name, style: const TextStyle(fontWeight: FontWeight.bold))),
+                          if (item.status == CartItemStatus.warning)
+                             Tooltip(
+                               message: AppStrings.priceMissingInStore,
+                               triggerMode: TooltipTriggerMode.tap,
+                               child: const Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 20),
+                             ),
+                          if (item.status == CartItemStatus.error)
+                             Tooltip(
+                               message: AppStrings.productNotIndexedInStore,
+                               triggerMode: TooltipTriggerMode.tap,
+                               child: const Icon(Icons.error_outline, color: Colors.red, size: 20),
+                             ),
+                          if (item.promoType != null)
+                            Container(
+                              margin: const EdgeInsets.only(left: 8),
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: Colors.orange.shade100,
+                                borderRadius: BorderRadius.circular(4),
+                                border: Border.all(color: Colors.orange),
+                              ),
+                              child: Text(
+                                item.promoType!,
+                                style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.orange),
+                              ),
+                            ),
+                        ],
+                      ),
+                      subtitle: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(isFresh ? '${AppStrings.freshIndicatorLabel} - €${item.price.toStringAsFixed(2)}' : '${item.price.toStringAsFixed(2)} ${AppStrings.pricePerUnit}'),
+                          if (item.unitPrice != null && item.unitPrice! > 0)
+                            Text(
+                              '(${item.unitPrice!.toStringAsFixed(2)} €/unità)',
+                              style: TextStyle(fontSize: 11, color: Colors.grey.shade600, fontStyle: FontStyle.italic),
+                            ),
+                        ],
+                      ),
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          IconButton(
+                            icon: const Icon(Icons.remove_circle_outline, color: Colors.indigo),
+                            onPressed: item.quantity > 1 
+                                ? () => ref.read(cartProvider.notifier).updateQuantity(item.id, item.quantity - 1)
+                                : null,
+                          ),
+                          Text('${item.quantity}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                          IconButton(
+                            icon: const Icon(Icons.add_circle_outline, color: Colors.indigo),
+                            onPressed: () => ref.read(cartProvider.notifier).updateQuantity(item.id, item.quantity + 1),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.delete, color: Colors.red),
+                            onPressed: () => ref.read(cartProvider.notifier).removeItem(item.id),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+        ),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+          decoration: BoxDecoration(
+            color: Colors.indigo.shade50,
+            border: Border(top: BorderSide(color: Colors.indigo.shade100, width: 2))
           ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
-            decoration: BoxDecoration(
-              color: Colors.indigo.shade50,
-              border: Border(top: BorderSide(color: Colors.indigo.shade100, width: 2))
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text(AppStrings.totalLabel, style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
-                Text('€${total.toStringAsFixed(2)}', style: const TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: Colors.green)),
-              ],
-            ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(AppStrings.totalLabel, style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+              Text('€${total.toStringAsFixed(2)}', style: const TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: Colors.green)),
+            ],
           ),
-          const SizedBox(height: 90), // Spazio per non coprire il riepilogo con il FAB
-        ],
-      ),
-      floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
-      floatingActionButton: FloatingActionButton.extended(
-        icon: const Icon(Icons.qr_code_scanner, size: 30),
-        label: const Text(AppStrings.addProductLabel, style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-        backgroundColor: Colors.indigo,
-        foregroundColor: Colors.white,
-        elevation: 6,
-        onPressed: () async {
-          // 1. Avvia la ricerca GPS in sottofondo senza rallentare o bloccare la videocamera!
-          final gpsFuture = _fetchGpsAndStore(ref);
-
-          // 2. Apri la fotocamera per scansionare il codice
-          final String? scannedCode = await Navigator.push(
-            context,
-            MaterialPageRoute(builder: (context) => const BarcodeScannerScreen()),
-          );
-          
-          if (scannedCode != null) {
-            // Se la fotocamera si è chiusa velocemente, aspetta che il GPS finisca di cercare in background
-            showDialog(context: context, barrierDismissible: false, builder: (_) => const Center(child: CircularProgressIndicator()));
-            final storeId = await gpsFuture;
-            if (mounted) Navigator.pop(context);
-
-            // Se viene rilevato uno store ed è diverso da quello attuale, impostalo o chiedi conferma
-            if (storeId != null && ref.read(activeStoreIdProvider) == null) {
-               ref.read(activeStoreIdProvider.notifier).setId(storeId);
-            }
-
-            // 3. Controlla se il prodotto esiste già in anagrafica
-            final products = ref.read(productProvider);
-            final existingProduct = products.where((p) => p.barcode == scannedCode).firstOrNull;
-
-            String? finalBarcodeToAdd;
-
-            if (existingProduct != null) {
-              // Il prodotto è già conosciuto: "passaggio in cassa" automatico
-              finalBarcodeToAdd = scannedCode;
-              if (mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                  content: Text('${AppStrings.addedSuccess} ${existingProduct.name}'),
-                  backgroundColor: Colors.green,
-                  duration: const Duration(seconds: 2),
-                ));
-              }
-            } else {
-              // Prodotto nuovo, apri la schermata di inserimento
-              final result = await Navigator.push(
+        ),
+        const SizedBox(height: 10),
+        Padding(
+          padding: const EdgeInsets.only(bottom: 16.0),
+          child: FloatingActionButton.extended(
+            icon: const Icon(Icons.qr_code_scanner, size: 30),
+            label: const Text(AppStrings.addProductLabel, style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            backgroundColor: Colors.indigo,
+            foregroundColor: Colors.white,
+            elevation: 6,
+            onPressed: () async {
+              final gpsFuture = _fetchGpsAndStore(ref);
+              final String? scannedCode = await Navigator.push(
                 context,
-                MaterialPageRoute(builder: (context) => AddProductScreen(initialBarcode: scannedCode, preselectedStoreId: ref.read(activeStoreIdProvider))),
+                MaterialPageRoute(builder: (context) => const BarcodeScannerScreen()),
               );
-              if (result != null && result is String) {
-                finalBarcodeToAdd = result;
+              if (scannedCode != null) {
+                showDialog(context: context, barrierDismissible: false, builder: (_) => const Center(child: CircularProgressIndicator()));
+                final storeId = await gpsFuture;
+                if (mounted) Navigator.pop(context);
+                if (storeId != null && ref.read(activeStoreIdProvider) == null) {
+                   ref.read(activeStoreIdProvider.notifier).setId(storeId);
+                }
+                final products = ref.read(productProvider);
+                final existingProduct = products.where((p) => p.barcode == scannedCode).firstOrNull;
+                String? finalBarcodeToAdd;
+                
+                if (existingProduct != null) {
+                  final currentStoreId = ref.read(activeStoreIdProvider);
+                  bool handled = false;
+                  
+                  if (currentStoreId != null) {
+                    final history = await ref.read(priceHistoryProvider).getHistoryForProduct(scannedCode);
+                    final storeHistory = history.where((h) => h.storeId == currentStoreId).firstOrNull;
+                    
+                    if (storeHistory != null) {
+                      final historyDate = DateTime.fromMillisecondsSinceEpoch(storeHistory.timestamp);
+                      final now = DateTime.now();
+                      bool isSameDay = historyDate.year == now.year && historyDate.month == now.month && historyDate.day == now.day;
+                      
+                      if (!isSameDay) {
+                        if (mounted) {
+                          final bool? confirmed = await showDialog<bool>(
+                            context: context,
+                            builder: (context) => AlertDialog(
+                              title: const Text(AppStrings.priceValidationTitle),
+                              content: Text('${AppStrings.priceValidationMessage}${storeHistory.price.toStringAsFixed(2)}${AppStrings.priceValidationQuestion}'),
+                              actions: [
+                                TextButton(
+                                  onPressed: () => Navigator.pop(context, false),
+                                  child: const Text(AppStrings.priceChanged),
+                                ),
+                                ElevatedButton(
+                                  onPressed: () => Navigator.pop(context, true),
+                                  child: const Text(AppStrings.priceConfirmed),
+                                ),
+                              ],
+                            ),
+                          );
+                          
+                          if (confirmed == true) {
+                            await ref.read(priceHistoryProvider).addPriceHistory(PriceHistory(
+                              id: const Uuid().v4(),
+                              productBarcode: scannedCode,
+                              storeId: currentStoreId,
+                              price: storeHistory.price,
+                              timestamp: now.millisecondsSinceEpoch,
+                              promoType: storeHistory.promoType,
+                              promoValidUntil: storeHistory.promoValidUntil,
+                            ));
+                            finalBarcodeToAdd = scannedCode;
+                            handled = true;
+                          } else if (confirmed == false) {
+                            // Leave handled = false to trigger AddProductScreen below
+                          } else {
+                            handled = true; // Dismissed
+                          }
+                        } else {
+                           handled = true;
+                        }
+                      } else {
+                        // Already checked today
+                        finalBarcodeToAdd = scannedCode;
+                        handled = true;
+                      }
+                    }
+                  }
+                  
+                  if (!handled) {
+                    if (mounted) {
+                      final result = await Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (context) => AddProductScreen(initialBarcode: scannedCode, preselectedStoreId: currentStoreId, isFastMode: true)),
+                      );
+                      if (result != null && result is String) {
+                        finalBarcodeToAdd = result;
+                      }
+                    }
+                  }
+                  
+                  if (finalBarcodeToAdd != null && mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                      content: Text('${AppStrings.addedSuccess} ${existingProduct.name}'),
+                      backgroundColor: Colors.green,
+                      duration: const Duration(seconds: 2),
+                    ));
+                  }
+                } else {
+                  final result = await Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => AddProductScreen(initialBarcode: scannedCode, preselectedStoreId: ref.read(activeStoreIdProvider), isFastMode: true)),
+                  );
+                  if (result != null && result is String) {
+                    finalBarcodeToAdd = result;
+                  }
+                }
+                if (finalBarcodeToAdd != null) {
+                  final productList = ref.read(productProvider);
+                  final product = productList.where((p) => p.barcode == finalBarcodeToAdd).firstOrNull;
+                  final currentStoreId = ref.read(activeStoreIdProvider);
+                  final history = await ref.read(priceHistoryProvider).getHistoryForProduct(finalBarcodeToAdd);
+                  final storeHistory = currentStoreId != null ? history.where((h) => h.storeId == currentStoreId).firstOrNull : null;
+                  final latestHistory = storeHistory ?? (history.isNotEmpty ? history.first : null);
+                  double price = latestHistory?.price ?? 0.0;
+                  CartItemStatus status = CartItemStatus.ok;
+                  if (currentStoreId != null) {
+                    if (storeHistory == null) status = CartItemStatus.error;
+                    else if (price <= 0) status = CartItemStatus.warning;
+                  }
+                  ref.read(cartProvider.notifier).addItem(
+                    CartItem(
+                      id: const Uuid().v4(),
+                      barcode: finalBarcodeToAdd,
+                      name: product?.name ?? AppStrings.unknownProduct,
+                      price: price,
+                      unitPrice: product?.pricePerKg,
+                      promoType: latestHistory?.promoType,
+                      imageUrl: product?.imageUrl,
+                      status: status,
+                    )
+                  );
+                }
               }
-            }
-            
-            // 4. Aggiungi il prodotto al carrello se è stato salvato o confermato
-            if (finalBarcodeToAdd != null) {
-              final productList = ref.read(productProvider);
-              final product = productList.where((p) => p.barcode == finalBarcodeToAdd).firstOrNull;
-              
-              final currentStoreId = ref.read(activeStoreIdProvider);
-              final history = await ref.read(priceHistoryProvider).getHistoryForProduct(finalBarcodeToAdd);
-              
-              // Se abbiamo uno store attivo, cerchiamo il prezzo specifico per quello store
-              final storeHistory = currentStoreId != null ? history.where((h) => h.storeId == currentStoreId).firstOrNull : null;
-              final latestHistory = storeHistory ?? (history.isNotEmpty ? history.first : null);
-              
-              double price = latestHistory?.price ?? 0.0;
-              CartItemStatus status = CartItemStatus.ok;
-              if (currentStoreId != null) {
-                if (storeHistory == null) status = CartItemStatus.error;
-                else if (price <= 0) status = CartItemStatus.warning;
-              }
-
-              ref.read(cartProvider.notifier).addItem(
-                CartItem(
-                  id: const Uuid().v4(),
-                  barcode: finalBarcodeToAdd,
-                  name: product?.name ?? AppStrings.unknownProduct,
-                  price: price,
-                  unitPrice: product?.pricePerKg,
-                  promoType: latestHistory?.promoType,
-                  imageUrl: product?.imageUrl,
-                  status: status,
-                )
-              );
-            }
-          }
-        },
-      ),
+            },
+          ),
+        ),
+      ],
     );
   }
 

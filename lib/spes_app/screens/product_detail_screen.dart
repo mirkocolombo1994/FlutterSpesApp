@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'dart:io';
 import 'package:intl/intl.dart';
 import '../models/product.dart';
+import '../models/category.dart';
 import '../models/price_history.dart';
 import '../models/store.dart';
 import '../providers/product_provider.dart';
@@ -20,18 +21,21 @@ class ProductDetailScreen extends ConsumerStatefulWidget {
   const ProductDetailScreen({super.key, required this.product});
 
   @override
-  ConsumerState<ProductDetailScreen> createState() => _ProductDetailScreenState();
+  ConsumerState<ProductDetailScreen> createState() =>
+      _ProductDetailScreenState();
 }
 
 class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
   // Stato per gestire la modalità modifica
   bool _isEditing = false;
-  
+
   // Controller per i campi di testo in modalità modifica
   late TextEditingController _nameController;
   late TextEditingController _categoryController;
   late TextEditingController _brandController;
-  
+  late TextEditingController _weightController;
+  String? _weightUnit;
+
   List<PriceHistory> _history = [];
   bool _isLoadingHistory = true;
 
@@ -39,8 +43,14 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
   void initState() {
     super.initState();
     _nameController = TextEditingController(text: widget.product.name);
-    _categoryController = TextEditingController(text: widget.product.category ?? '');
+    _categoryController = TextEditingController(
+      text: widget.product.category ?? '',
+    );
     _brandController = TextEditingController(text: widget.product.brand ?? '');
+    _weightController = TextEditingController(
+      text: widget.product.weight?.toString() ?? '',
+    );
+    _weightUnit = widget.product.weightUnit ?? AppStrings.unitKg;
     _loadPriceHistory();
   }
 
@@ -49,12 +59,15 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
     _nameController.dispose();
     _categoryController.dispose();
     _brandController.dispose();
+    _weightController.dispose();
     super.dispose();
   }
 
   /// Carica la cronologia dei prezzi per questo prodotto dal DB
   Future<void> _loadPriceHistory() async {
-    final history = await ref.read(priceHistoryProvider).getHistoryForProduct(widget.product.barcode);
+    final history = await ref
+        .read(priceHistoryProvider)
+        .getHistoryForProduct(widget.product.barcode);
     if (mounted) {
       setState(() {
         _history = history;
@@ -70,38 +83,39 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
       name: _nameController.text.trim(),
       description: widget.product.description,
       brand: _brandController.text.trim(),
-      weight: widget.product.weight,
-      weightUnit: widget.product.weightUnit,
+      weight: double.tryParse(_weightController.text.replaceAll(',', '.')),
+      weightUnit: _weightUnit,
       imageUrl: widget.product.imageUrl,
-      category: _categoryController.text.trim().isEmpty ? null : _categoryController.text.trim(),
+      category: _categoryController.text.trim().isEmpty
+          ? null
+          : _categoryController.text.trim(),
       pricePerKg: widget.product.pricePerKg,
     );
 
     await ref.read(productProvider.notifier).updateProduct(updatedProduct);
-    
+
     if (mounted) {
       setState(() {
         _isEditing = false; // Torna in modalità visualizzazione
       });
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text(AppStrings.saveSuccess)),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text(AppStrings.saveSuccess)));
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    // IMPORTANTE: Ascoltiamo la lista dei prodotti dal provider.
-    // In questo modo, se il prodotto viene aggiornato, UI reagisce immediatamente.
+    // Watch providers at the top level
     final products = ref.watch(productProvider);
+    final categories = ref.watch(categoryProvider);
+    final stores = ref.watch(storeProvider);
+
     final product = products.firstWhere(
       (p) => p.barcode == widget.product.barcode,
-      orElse: () => widget.product, // Fallback se non trovato
+      orElse: () => widget.product,
     );
 
-    // Watch stores for mapping names in the table
-    final stores = ref.watch(storeProvider);
-    
     // Group history by store to get latest price
     final latestPrices = <String, PriceHistory>{};
     for (var h in _history) {
@@ -112,7 +126,9 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: _isEditing ? const Text(AppStrings.editProduct) : Text(product.name),
+        title: _isEditing
+            ? const Text(AppStrings.editProduct)
+            : Text(product.name),
         elevation: 0,
         actions: [
           if (!_isEditing)
@@ -129,14 +145,13 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
                   _nameController.text = product.name;
                   _categoryController.text = product.category ?? '';
                   _brandController.text = product.brand ?? '';
+                  _weightController.text = product.weight?.toString() ?? '';
+                  _weightUnit = product.weightUnit ?? AppStrings.unitKg;
                 });
               },
             ),
-            IconButton(
-              icon: const Icon(Icons.check),
-              onPressed: _saveChanges,
-            ),
-          ]
+            IconButton(icon: const Icon(Icons.check), onPressed: _saveChanges),
+          ],
         ],
       ),
       body: SingleChildScrollView(
@@ -151,27 +166,28 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _buildMainInfo(product),
+                  _buildMainInfo(product, categories),
                   const SizedBox(height: 24),
-                  
+
                   // Product Info Section
                   _buildDetailsSection(product),
-                  
+
                   const SizedBox(height: 32),
-                  
+
                   // Price History Table Section
                   _buildPriceHistoryTable(latestPrices, stores),
-                  
-                  if (product.description != null && product.description!.isNotEmpty) ...[
+
+                  if (product.description != null &&
+                      product.description!.isNotEmpty) ...[
                     const SizedBox(height: 24),
                     _buildSectionHeader(AppStrings.descriptionLabel),
                     const SizedBox(height: 8),
                     Text(
                       product.description!,
                       style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                            color: Colors.blueGrey.shade800,
-                            height: 1.5,
-                          ),
+                        color: Colors.blueGrey.shade800,
+                        height: 1.5,
+                      ),
                     ),
                   ],
                 ],
@@ -205,22 +221,29 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
     }
   }
 
-  Widget _buildMainInfo(Product product) {
+  Widget _buildMainInfo(Product product, List<Category> categories) {
     if (_isEditing) {
-      final categories = ref.watch(categoryProvider);
-      
       return Column(
         children: [
           TextField(
+            key: const ValueKey('edit_name_field'),
             controller: _nameController,
-            decoration: const InputDecoration(labelText: AppStrings.nameLabel, border: OutlineInputBorder()),
+            decoration: const InputDecoration(
+              labelText: AppStrings.nameLabel,
+              border: OutlineInputBorder(),
+            ),
+            onTapOutside: (_) => FocusScope.of(context).unfocus(),
           ),
           const SizedBox(height: 12),
           DropdownButtonFormField<String>(
-            value: categories.any((c) => c.name == _categoryController.text) 
-                ? _categoryController.text 
+            key: const ValueKey('edit_category_dropdown'),
+            value: categories.any((c) => c.name == _categoryController.text)
+                ? _categoryController.text
                 : null,
-            decoration: const InputDecoration(labelText: AppStrings.categoryLabel, border: OutlineInputBorder()),
+            decoration: const InputDecoration(
+              labelText: AppStrings.categoryLabel,
+              border: OutlineInputBorder(),
+            ),
             items: categories.map((c) {
               return DropdownMenuItem(value: c.name, child: Text(c.name));
             }).toList(),
@@ -231,8 +254,13 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
           ),
           const SizedBox(height: 12),
           TextField(
+            key: const ValueKey('edit_brand_field'),
             controller: _brandController,
-            decoration: const InputDecoration(labelText: AppStrings.brandLabel, border: OutlineInputBorder()),
+            decoration: const InputDecoration(
+              labelText: AppStrings.brandLabel,
+              border: OutlineInputBorder(),
+            ),
+            onTapOutside: (_) => FocusScope.of(context).unfocus(),
           ),
         ],
       );
@@ -248,17 +276,17 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
               Text(
                 product.name,
                 style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                      fontWeight: FontWeight.bold,
-                      color: Colors.blueGrey.shade900,
-                    ),
+                  fontWeight: FontWeight.bold,
+                  color: Colors.blueGrey.shade900,
+                ),
               ),
               if (product.brand != null && product.brand!.isNotEmpty)
                 Text(
                   product.brand!,
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        color: Colors.blueGrey.shade600,
-                        fontStyle: FontStyle.italic,
-                      ),
+                    color: Colors.blueGrey.shade600,
+                    fontStyle: FontStyle.italic,
+                  ),
                 ),
             ],
           ),
@@ -274,11 +302,63 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
   }
 
   Widget _buildDetailsSection(Product product) {
+    if (_isEditing) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildSectionHeader(AppStrings.technicalDetails),
+          _buildInfoRow(
+            Icons.qr_code_scanner,
+            AppStrings.barcodeLabel,
+            product.barcode,
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  key: const ValueKey('edit_weight_field'),
+                  controller: _weightController,
+                  decoration: const InputDecoration(
+                    labelText: AppStrings.weightLabel,
+                    border: OutlineInputBorder(),
+                  ),
+                  keyboardType: TextInputType.number,
+                  onTapOutside: (_) => FocusScope.of(context).unfocus(),
+                ),
+              ),
+              const SizedBox(width: 12),
+              DropdownButton<String>(
+                value: _weightUnit,
+                items:
+                    [
+                          AppStrings.unitKg,
+                          AppStrings.unitG,
+                          AppStrings.unitL,
+                          AppStrings.unitMl,
+                          AppStrings.unitPz,
+                        ]
+                        .map((u) => DropdownMenuItem(value: u, child: Text(u)))
+                        .toList(),
+                onChanged: (val) {
+                  setState(() => _weightUnit = val);
+                },
+              ),
+            ],
+          ),
+        ],
+      );
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _buildSectionHeader(AppStrings.technicalDetails),
-        _buildInfoRow(Icons.qr_code_scanner, AppStrings.barcodeLabel, product.barcode),
+        _buildInfoRow(
+          Icons.qr_code_scanner,
+          AppStrings.barcodeLabel,
+          product.barcode,
+        ),
         if (product.weight != null)
           _buildInfoRow(
             Icons.scale,
@@ -289,7 +369,10 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
     );
   }
 
-  Widget _buildPriceHistoryTable(Map<String, PriceHistory> latestPrices, List<Store> stores) {
+  Widget _buildPriceHistoryTable(
+    Map<String, PriceHistory> latestPrices,
+    List<Store> stores,
+  ) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -323,9 +406,13 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
                 ...latestPrices.entries.map((entry) {
                   final storeId = entry.key;
                   final history = entry.value;
-                  final store = stores.where((s) => s.id == storeId).firstOrNull;
-                  final date = DateTime.fromMillisecondsSinceEpoch(history.timestamp);
-                  
+                  final store = stores
+                      .where((s) => s.id == storeId)
+                      .firstOrNull;
+                  final date = DateTime.fromMillisecondsSinceEpoch(
+                    history.timestamp,
+                  );
+
                   return TableRow(
                     children: [
                       _buildTableCell(store?.name ?? AppStrings.unknown),
@@ -366,8 +453,17 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(label, style: TextStyle(fontSize: 11, color: Colors.blueGrey.shade500)),
-              Text(value, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+              Text(
+                label,
+                style: TextStyle(fontSize: 11, color: Colors.blueGrey.shade500),
+              ),
+              Text(
+                value,
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
             ],
           ),
         ],

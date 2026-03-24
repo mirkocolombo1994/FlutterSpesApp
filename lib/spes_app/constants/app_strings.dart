@@ -6,10 +6,31 @@ class AppStrings {
   static const String drawerMenuTitle = 'SpesApp Menu';
   static const String navCassa = 'Cassa';
   static const String navListe = 'Liste';
+  static const String navHomePrincipale = 'Home Principale';
+  static const String navImpostazioni = 'Impostazioni';
+  static const String settingsTitle = 'Impostazioni';
+  static const String appVersionPrefix = 'Versione App:';
+  static const String themeModeLabel = 'Tema Scuro';
+  static const String aboutAppLabel = 'Informazioni App';
+  static const String aboutAppDescription = 'SpesApp - Gestione intelligente della spesa.\nSviluppato con Flutter.';
   static const String navProdotti = 'Prodotti';
   static const String navPuntiVendita = 'Punti Vendita';
   static const String navStorico = 'Storico Prezzi';
   static const String navCategorie = 'Categorie';
+  static const String navPromozioni = 'Promozioni';
+
+  // PromotionsScreen
+  static const String titlePromotions = 'Promozioni';
+  static const String subtitlePromotions = 'Gestisci le promo in corso per punto vendita';
+  static const String addPromotionTitle = 'Nuova Promozione';
+  static const String editPromotionTitle = 'Modifica Promozione';
+  static const String noPromotionsText = 'Nessuna promozione registrata.';
+  static const String validationNameRequired = 'Inserire il nome della promozione';
+  static const String validationStoreRequired = 'Selezionare un punto vendita';
+  static const String validationDateRequired = 'Inserire le date validità';
+  static const String discountLabel = 'Sconto (%)';
+  static const String validFromLabel = 'Valida dal:';
+  static const String validUntilLabel = 'Giorno di fine:';
 
   // ProductDetailScreen
   static const String editProduct = 'Modifica Prodotto';
@@ -60,8 +81,19 @@ class AppStrings {
   static const String autoSetStore = '. Supermercato auto-impostato!';
   static const String newFreshProductAlert = '🏷️ Nuovo prodotto fresco! Memorizzalo. Prezzo estratto!';
   static const String selectStoreAndPriceWarning = 'Seleziona il punto vendita in cui ti trovi e il prezzo!';
+  static const String productDataSection = 'Dati Prodotto';
+  static const String priceEntrySection = 'Rilevazione Prezzo (Opzionale)';
 
   // ProductsScreen
+  static const String myProductsTitle = 'I Miei Prodotti';
+  static const String noSearchResults = 'Nessun prodotto trovato per la ricerca';
+  static const String noProductsRegistered = 'Nessun prodotto censito';
+  static const String deleteProductTitle = 'Elimina Prodotto';
+  static const String deleteProductConfirmPrefix = 'Sei sicuro di voler eliminare "';
+  static const String deleteProductConfirmSuffix = '"?';
+  static const String sortAlphabetical = 'Alfabeticamente';
+  static const String sortCategory = 'Per Categoria';
+  static const String unknownCategory = 'Senza Categoria';
   static const String searchProductsHint = 'Cerca prodotti...';
   static const String noProductsFound = 'Nessun prodotto trovato.';
 
@@ -125,6 +157,11 @@ class AppStrings {
   static const String unknownProduct = 'Prodotto sconosciuto';
   static const String pricePerUnit = '€ cad.';
   static const String freshIndicatorLabel = 'Fresco';
+  static const String priceValidationTitle = 'Verifica Prezzo';
+  static const String priceValidationMessage = 'Il prezzo registrato è €';
+  static const String priceValidationQuestion = '. È ancora lo stesso?';
+  static const String priceConfirmed = 'Sì, Confermato';
+  static const String priceChanged = 'No, è cambiato';
 
   // ShoppingListsScreen
   static const String shoppingListsTitle = 'Le mie Liste Spesa';

@@ -31,4 +31,10 @@ class ProductNotifier extends Notifier<List<Product>> {
     await SpesAppDatabaseHelper.instance.insertProduct(product); // insertProduct usa ConflictAlgorithm.replace
     await loadProducts(); // Ricarica la lista aggiornata
   }
+
+  // Elimina un prodotto dal DB
+  Future<void> deleteProduct(String barcode) async {
+    await SpesAppDatabaseHelper.instance.deleteProduct(barcode);
+    await loadProducts(); // Ricarica la lista aggiornata
+  }
 }

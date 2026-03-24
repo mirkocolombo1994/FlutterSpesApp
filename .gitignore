@@ -11,6 +11,10 @@
 .svn/
 .swiftpm/
 migrate_working_dir/
+analysis.txt
+analyze_results.txt
+analyze_res2.txt
+*.txt
 
 # IntelliJ related
 *.iml
@@ -27,11 +31,22 @@ migrate_working_dir/
 **/doc/api/
 **/ios/Flutter/.last_build_id
 .dart_tool/
+.flutter-plugins
 .flutter-plugins-dependencies
 .pub-cache/
 .pub/
 /build/
 /coverage/
+
+# Generated files (should not be versioned)
+lib/generated_plugin_registrant.dart
+windows/flutter/generated_plugins.cmake
+windows/flutter/generated_plugin_registrant.h
+windows/flutter/generated_plugin_registrant.cc
+linux/flutter/generated_plugins.cmake
+macos/Flutter/GeneratedPluginRegistrant.swift
+ios/Runner/GeneratedPluginRegistrant.*
+android/app/src/main/java/io/flutter/plugins/GeneratedPluginRegistrant.java
 
 # Symbolication related
 app.*.symbols
@@ -43,7 +58,6 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
-
 
 # Node.js
 node_modules/

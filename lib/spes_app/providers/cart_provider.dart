@@ -63,6 +63,26 @@ class CartNotifier extends Notifier<List<CartItem>> {
     state = state.where((e) => e.id != id).toList();
   }
 
+  void updateQuantity(String id, int newQuantity) {
+    if (newQuantity <= 0) return;
+    state = state.map((item) {
+      if (item.id == id) {
+        return CartItem(
+          id: item.id,
+          barcode: item.barcode,
+          name: item.name,
+          price: item.price,
+          unitPrice: item.unitPrice,
+          promoType: item.promoType,
+          imageUrl: item.imageUrl,
+          status: item.status,
+          quantity: newQuantity,
+        );
+      }
+      return item;
+    }).toList();
+  }
+
   void clear() {
     state = [];
   }

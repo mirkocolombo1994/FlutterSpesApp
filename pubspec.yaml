@@ -1,7 +1,7 @@
 name: task_master_app
 description: A new Flutter project.
 publish_to: none
-version: 0.2.1+2
+version: 0.2.4+5
 environment:
   sdk: ^3.10.8
 dependencies:
@@ -25,6 +25,8 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^6.0.0
+  mocktail: ^1.0.4
+  sqflite_common_ffi: ^2.3.3
 flutter:
   generate: true
   uses-material-design: true

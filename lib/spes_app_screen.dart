@@ -1,10 +1,15 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'spes_app/providers/cart_provider.dart';
+import 'spes_app/providers/store_provider.dart';
 import 'spes_app/screens/shopping_lists_screen.dart';
 import 'spes_app/screens/products_screen.dart';
 import 'spes_app/screens/stores_screen.dart';
 import 'spes_app/screens/price_history_screen.dart';
 import 'spes_app/screens/current_shopping_screen.dart';
 import 'spes_app/screens/categories_screen.dart';
+import 'spes_app/screens/settings_screen.dart';
+import 'spes_app/screens/promotions_screen.dart';
 import 'spes_app/constants/app_strings.dart';
 
 /// Schermata principale dell'applicazione SpesApp.
@@ -28,79 +33,125 @@ class _SpesAppScreenState extends State<SpesAppScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      // AppBar che mostra il titolo in base alla pagina selezionata
-      appBar: AppBar(
-        title: Text(_currentIndex == 0 ? AppStrings.currentShopping : AppStrings.shoppingLists),
-      ),
-      // Menu laterale a scomparsa per le opzioni di gestione
-      drawer: Drawer(
-        child: Column(
-          children: [
-            DrawerHeader(
-              decoration: BoxDecoration(
-                color: Colors.indigo.shade100,
+    return Consumer(
+      builder: (context, ref, child) {
+        final cartItems = ref.watch(cartProvider);
+        
+        return Scaffold(
+          // AppBar che mostra il titolo in base alla pagina selezionata
+          appBar: AppBar(
+            automaticallyImplyLeading: false, // Nasconde la freccia indietro automatica
+            leading: Builder(
+              builder: (context) => IconButton(
+                icon: const Icon(Icons.menu),
+                onPressed: () => Scaffold.of(context).openDrawer(),
               ),
-              child: const Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.shopping_basket, size: 50, color: Colors.indigo),
-                    SizedBox(height: 10),
-                    Text(
-                      AppStrings.drawerMenuTitle,
-                      style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.indigo),
+            ),
+            title: Text(_currentIndex == 0 ? AppStrings.currentShopping : AppStrings.shoppingLists),
+            actions: [
+              if (_currentIndex == 0 && cartItems.isNotEmpty)
+                IconButton(
+                  icon: const Icon(Icons.delete_sweep),
+                  onPressed: () {
+                    ref.read(cartProvider.notifier).clear();
+                    ref.read(activeStoreIdProvider.notifier).setId(null);
+                  },
+                  tooltip: AppStrings.clearCartTooltip,
+                )
+            ],
+          ),
+          // Menu laterale a scomparsa per le opzioni di gestione
+          drawer: Drawer(
+            child: Column(
+              children: [
+                DrawerHeader(
+                  decoration: BoxDecoration(
+                    color: Colors.indigo.shade100,
+                  ),
+                  child: const Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.shopping_basket, size: 50, color: Colors.indigo),
+                        SizedBox(height: 10),
+                        Text(
+                          AppStrings.drawerMenuTitle,
+                          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.indigo),
+                        ),
+                      ],
                     ),
-                  ],
+                  ),
                 ),
+                _buildDrawerItem(
+                  icon: Icons.inventory_2,
+                  title: AppStrings.navProdotti,
+                  onTap: () => _navigateTo(const ProductsScreen()),
+                ),
+                _buildDrawerItem(
+                  icon: Icons.storefront,
+                  title: AppStrings.navPuntiVendita,
+                  onTap: () => _navigateTo(const StoresScreen()),
+                ),
+                _buildDrawerItem(
+                  icon: Icons.history,
+                  title: AppStrings.navStorico,
+                  onTap: () => _navigateTo(const PriceHistoryScreen()),
+                ),
+                _buildDrawerItem(
+                  icon: Icons.category,
+                  title: AppStrings.navCategorie,
+                  onTap: () => _navigateTo(const CategoriesScreen()),
+                ),
+                ListTile(
+                leading: const Icon(Icons.local_offer, color: Colors.blue),
+                title: const Text(AppStrings.navPromozioni),
+                onTap: () {
+                  Navigator.pop(context);
+                  Navigator.push(context, MaterialPageRoute(builder: (context) => const PromotionsScreen()));
+                },
               ),
+              const Divider(),
+                _buildDrawerItem(
+                  icon: Icons.settings,
+                  title: AppStrings.navImpostazioni,
+                  onTap: () => _navigateTo(const SettingsScreen()),
+                ),
+                _buildDrawerItem(
+                  icon: Icons.home,
+                  title: AppStrings.navHomePrincipale,
+                  onTap: () {
+                    Navigator.pop(context); // Chiude drawer
+                    Navigator.pop(context); // Torna alla HomeScreen principale
+                  },
+                ),
+              ],
             ),
-            _buildDrawerItem(
-              icon: Icons.inventory_2,
-              title: AppStrings.navProdotti,
-              onTap: () => _navigateTo(const ProductsScreen()),
-            ),
-            _buildDrawerItem(
-              icon: Icons.storefront,
-              title: AppStrings.navPuntiVendita,
-              onTap: () => _navigateTo(const StoresScreen()),
-            ),
-            _buildDrawerItem(
-              icon: Icons.history,
-              title: AppStrings.navStorico,
-              onTap: () => _navigateTo(const PriceHistoryScreen()),
-            ),
-            _buildDrawerItem(
-              icon: Icons.category,
-              title: AppStrings.navCategorie,
-              onTap: () => _navigateTo(const CategoriesScreen()),
-            ),
-          ],
-        ),
-      ),
-      body: _pages[_currentIndex],
-      // Barra di navigazione inferiore semplificata con solo 2 icone
-      bottomNavigationBar: BottomNavigationBar(
-        currentIndex: _currentIndex,
-        onTap: (index) {
-          setState(() {
-            _currentIndex = index;
-          });
-        },
-        type: BottomNavigationBarType.fixed,
-        selectedItemColor: Colors.indigo,
-        unselectedItemColor: Colors.grey,
-        items: const [
-          BottomNavigationBarItem(
-            icon: Icon(Icons.shopping_cart),
-            label: AppStrings.navCassa,
           ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.receipt_long),
-            label: AppStrings.navListe,
+          body: _pages[_currentIndex],
+          // Barra di navigazione inferiore semplificata con solo 2 icone
+          bottomNavigationBar: BottomNavigationBar(
+            currentIndex: _currentIndex,
+            onTap: (index) {
+              setState(() {
+                _currentIndex = index;
+              });
+            },
+            type: BottomNavigationBarType.fixed,
+            selectedItemColor: Colors.indigo,
+            unselectedItemColor: Colors.grey,
+            items: const [
+              BottomNavigationBarItem(
+                icon: Icon(Icons.shopping_cart),
+                label: AppStrings.navCassa,
+              ),
+              BottomNavigationBarItem(
+                icon: Icon(Icons.receipt_long),
+                label: AppStrings.navListe,
+              ),
+            ],
           ),
-        ],
-      ),
+        );
+      }
     );
   }
 
