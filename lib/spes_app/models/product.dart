@@ -9,7 +9,7 @@ class Product {
   final String? category;
   final double? pricePerKg;
 
-  Product({
+  const Product({
     required this.barcode,
     required this.name,
     this.description,

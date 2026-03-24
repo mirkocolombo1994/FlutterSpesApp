@@ -206,7 +206,7 @@ class _CurrentShoppingScreenState extends ConsumerState<CurrentShoppingScreen> {
                       subtitle: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(isFresh ? '${AppStrings.freshIndicatorLabel} - €${item.price.toStringAsFixed(2)}' : '€${item.price.toStringAsFixed(2)} ${AppStrings.pricePerUnit}'),
+                          Text(isFresh ? '${AppStrings.freshIndicatorLabel} - €${item.price.toStringAsFixed(2)}' : '${item.price.toStringAsFixed(2)} ${AppStrings.pricePerUnit}'),
                           if (item.unitPrice != null && item.unitPrice! > 0)
                             Text(
                               '(${item.unitPrice!.toStringAsFixed(2)} €/unità)',
