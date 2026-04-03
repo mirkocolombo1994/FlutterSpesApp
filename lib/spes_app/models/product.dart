@@ -8,6 +8,7 @@ class Product {
   final String? imageUrl;
   final String? category;
   final double? pricePerKg;
+  final String? rawOffData; // JSON data from Open Food Facts for future use
 
   const Product({
     required this.barcode,
@@ -19,6 +20,7 @@ class Product {
     this.imageUrl,
     this.category,
     this.pricePerKg,
+    this.rawOffData,
   });
 
   Map<String, dynamic> toMap() {
@@ -32,6 +34,7 @@ class Product {
       'price_per_kg': pricePerKg,
       'image_url': imageUrl,
       'category': category,
+      'raw_off_data': rawOffData,
     };
   }
 
@@ -46,6 +49,7 @@ class Product {
       pricePerKg: map['price_per_kg'],
       imageUrl: map['image_url'],
       category: map['category'],
+      rawOffData: map['raw_off_data'],
     );
   }
 }

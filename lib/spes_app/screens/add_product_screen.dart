@@ -15,6 +15,7 @@ import 'package:path_provider/path_provider.dart';
 import 'dart:io';
 import 'package:path/path.dart' as p;
 import '../constants/app_strings.dart';
+import '../providers/open_food_facts_provider.dart';
 
 class AddProductScreen extends ConsumerStatefulWidget {
   final String? initialBarcode;
@@ -59,6 +60,7 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
 
   File? _imageFile;
   String? _selectedCategory;
+  String? _rawOffData; // Memorizziamo i dati OFF per salvarli nel DB
 
   final ImagePicker _picker = ImagePicker();
 
@@ -168,6 +170,45 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
       }
     } else {
       bool isFresh = searchBarcode.length == 7 && searchBarcode.startsWith('2');
+      
+      if (!isFresh) {
+        // Mostriamo un caricamento rapido
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Ricerca su Open Food Facts...'),
+              duration: Duration(seconds: 1),
+            ),
+          );
+        }
+
+        final offService = ref.read(openFoodFactsProvider);
+        final offProduct = await offService.fetchProductByBarcode(searchBarcode);
+
+        if (offProduct != null && mounted) {
+          setState(() {
+            _nameController.text = offProduct.name;
+            _brandController.text = offProduct.brand ?? '';
+            _description = offProduct.description ?? '';
+            _weightUnit = offProduct.weightUnit ?? AppStrings.unitKg;
+            if (offProduct.weight != null) {
+              _weightController.text = offProduct.weight!.toString();
+            }
+            _selectedCategory = offProduct.category;
+            _rawOffData = offProduct.rawOffData;
+          });
+
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Prodotto trovato su Open Food Facts: ${offProduct.name}'),
+              backgroundColor: Colors.blue,
+            ),
+          );
+          _priceFocusNode.requestFocus();
+          return; // Usciamo perché abbiamo trovato il prodotto
+        }
+      }
+
       if (isFresh && mounted) {
         if (_nameController.text.isEmpty) {
           _nameController.text = 'Prodotto Banco Fresco (Rilevato)';
@@ -248,6 +289,7 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
         pricePerKg: double.tryParse(_pricePerKgController.text),
         imageUrl: localImagePath ?? (File(_barcodeController.text).existsSync() ? _barcodeController.text : null),
         category: _selectedCategory,
+        rawOffData: _rawOffData,
       );
 
       await ref.read(productProvider.notifier).addProduct(newProduct);

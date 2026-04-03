@@ -26,7 +26,7 @@ class SpesAppDatabaseHelper {
 
     return await openDatabase(
       path,
-      version: 7,
+      version: 8,
       onCreate: _createDB,
       onUpgrade: _upgradeDB,
       onConfigure: (db) async {
@@ -80,6 +80,11 @@ class SpesAppDatabaseHelper {
         ''');
       } catch (_) {}
     }
+    if (oldVersion < 8) {
+      try {
+        await db.execute('ALTER TABLE products ADD COLUMN raw_off_data TEXT');
+      } catch (_) {}
+    }
   }
 
   Future _createDB(Database db, int version) async {
@@ -125,7 +130,8 @@ class SpesAppDatabaseHelper {
         weight_unit TEXT,
         price_per_kg REAL,
         image_url TEXT,
-        category TEXT
+        category TEXT,
+        raw_off_data TEXT
       )
     ''');
 
