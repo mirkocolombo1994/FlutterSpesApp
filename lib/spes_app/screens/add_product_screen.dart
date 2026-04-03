@@ -43,6 +43,7 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
   final _priceController = TextEditingController();
   final _pricePerKgController = TextEditingController();
   final _discountPercentController = TextEditingController();
+  final _priceFocusNode = FocusNode();
 
   String _description = '';
   String? _weightUnit = AppStrings.unitKg;
@@ -90,6 +91,7 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
     _priceController.dispose();
     _pricePerKgController.dispose();
     _discountPercentController.dispose();
+    _priceFocusNode.dispose();
     super.dispose();
   }
 
@@ -167,6 +169,7 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
             duration: const Duration(seconds: 4),
           ),
         );
+        _priceFocusNode.requestFocus();
       }
     } else {
       bool isFresh = searchBarcode.length == 7 && searchBarcode.startsWith('2');
@@ -473,6 +476,7 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
                       ],
                       TextFormField(
                         controller: _priceController,
+                        focusNode: _priceFocusNode,
                         decoration: const InputDecoration(labelText: AppStrings.recordedPriceRequired, border: OutlineInputBorder()),
                         keyboardType: const TextInputType.numberWithOptions(decimal: true),
                       ),
@@ -538,6 +542,7 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
                           const SizedBox(height: 16),
                           TextFormField(
                             controller: _priceController,
+                            focusNode: _priceFocusNode,
                             decoration: const InputDecoration(labelText: AppStrings.recordedPriceRequired, border: OutlineInputBorder()),
                             keyboardType: const TextInputType.numberWithOptions(decimal: true),
                           ),
