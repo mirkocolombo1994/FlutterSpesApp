@@ -39,6 +39,7 @@ class OpenFoodFactsService {
         final off.Product offProductSource = result.product!;
         
         final normalization = _normalizeQuantity(offProductSource.quantity ?? '');
+        final categoryTag = offProductSource.categoriesTags?.firstOrNull;
         
         return Product(
           barcode: barcode,
@@ -48,7 +49,8 @@ class OpenFoodFactsService {
           imageUrl: offProductSource.imageFrontUrl,
           weight: normalization.value,
           weightUnit: normalization.unit,
-          category: offProductSource.categoriesTags?.firstOrNull?.replaceAll('en:', '').replaceAll('it:', ''),
+          // We store the ID here. The UI will look up/create the category.
+          category: categoryTag,
           // pricePerKg will be calculated when user enters the price
           rawOffData: result.product?.toJson().toString(),
         );
@@ -78,12 +80,22 @@ class OpenFoodFactsService {
     ];
 
     return commonCategoryTags.map((tag) {
-      final name = tag.split(':').last.replaceAll('-', ' ');
       return Category(
         id: tag,
-        name: name[0].toUpperCase() + name.substring(1),
+        name: cleanCategoryName(tag),
       );
     }).toList();
+  }
+
+  /// Utility to clean a category tag (e.g. "it:bevande-analcoliche" -> "Bevande analcoliche")
+  String cleanCategoryName(String tag) {
+    // Remove language prefixes
+    String name = tag.replaceAll(RegExp(r'^[a-z]{2}:'), '');
+    // Replace dashes with spaces
+    name = name.replaceAll('-', ' ');
+    // Capitalize first letter
+    if (name.isEmpty) return name;
+    return name[0].toUpperCase() + name.substring(1);
   }
 
   _NormalizedQuantity _normalizeQuantity(String quantity) {

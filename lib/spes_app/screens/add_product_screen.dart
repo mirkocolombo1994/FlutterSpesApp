@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/product.dart';
+import '../models/category.dart';
 import '../models/price_history.dart';
 import '../providers/product_provider.dart';
 import '../providers/store_provider.dart';
@@ -152,6 +153,9 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
       _brandController.text = existingProduct.brand ?? '';
       _description = existingProduct.description ?? '';
       _weightUnit = existingProduct.weightUnit ?? AppStrings.unitKg;
+      
+      // We check if the existing category is a Name or an ID.
+      // If it's a name that matches any category ID, we convert it (soft migration).
       _selectedCategory = existingProduct.category;
 
       if (existingProduct.imageUrl != null) {
@@ -197,7 +201,24 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
             if (offProduct.weight != null) {
               _weightController.text = offProduct.weight!.toString();
             }
-            _selectedCategory = offProduct.category;
+            
+            // Gestione Categoria
+            if (offProduct.category != null) {
+              final String categoryId = offProduct.category!;
+              final categories = ref.read(categoryProvider);
+              
+              if (!categories.any((c) => c.id == categoryId)) {
+                // Se la categoria non esiste, la creiamo con un nome pulito
+                final offService = ref.read(openFoodFactsProvider);
+                final Category newCat = Category(
+                  id: categoryId,
+                  name: offService.cleanCategoryName(categoryId),
+                );
+                ref.read(categoryProvider.notifier).addCategory(newCat);
+              }
+              _selectedCategory = categoryId;
+            }
+            
             _rawOffData = offProduct.rawOffData;
           });
 
@@ -414,8 +435,9 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
                         final categories = ref.watch(categoryProvider);
                         return DropdownButtonFormField<String>(
                           decoration: const InputDecoration(labelText: AppStrings.categoryLabel, border: OutlineInputBorder()),
-                          value: categories.any((c) => c.name == _selectedCategory) ? _selectedCategory : null,
-                          items: categories.map((c) => DropdownMenuItem(value: c.name, child: Text(c.name))).toList(),
+                          // We check by ID now
+                          value: categories.any((c) => c.id == _selectedCategory) ? _selectedCategory : null,
+                          items: categories.map((c) => DropdownMenuItem(value: c.id, child: Text(c.name))).toList(),
                           onChanged: (val) => setState(() => _selectedCategory = val),
                           hint: const Text(AppStrings.selectCategoryHint),
                         );

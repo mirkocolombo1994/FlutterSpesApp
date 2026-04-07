@@ -32,6 +32,12 @@ class CategoryNotifier extends Notifier<List<Category>> {
     await loadCategories(); 
   }
 
+  /// Aggiorna una categoria esistente
+  Future<void> updateCategory(Category category) async {
+    await SpesAppDatabaseHelper.instance.insertCategory(category);
+    await loadCategories(); 
+  }
+
   /// Elimina una categoria tramite ID e aggiorna l'interfaccia
   Future<void> deleteCategory(String id) async {
     await SpesAppDatabaseHelper.instance.deleteCategory(id);

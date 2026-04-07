@@ -63,6 +63,46 @@ class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
     );
   }
 
+  /// Mostra un dialogo di input per modificare il nome della categoria esistente
+  void _showEditDialog(Category category) {
+    _textFieldController.text = category.name;
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Modifica Categoria'),
+        content: TextField(
+          controller: _textFieldController,
+          decoration: const InputDecoration(hintText: AppStrings.categoryNameHint),
+          autofocus: true,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              _textFieldController.clear();
+              Navigator.pop(context);
+            },
+            child: const Text(AppStrings.cancel),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              final newName = _textFieldController.text.trim();
+              if (newName.isNotEmpty) {
+                final updatedCategory = Category(
+                  id: category.id,
+                  name: newName,
+                );
+                ref.read(categoryProvider.notifier).updateCategory(updatedCategory);
+                _textFieldController.clear();
+                Navigator.pop(context);
+              }
+            },
+            child: const Text('Salva'),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     // Ascolta il provider per reagire ai cambiamenti della lista categorie
@@ -80,12 +120,21 @@ class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
                 final category = categories[index];
                 return ListTile(
                   title: Text(category.name),
-                  trailing: IconButton(
-                    icon: const Icon(Icons.delete, color: Colors.red),
-                    onPressed: () {
-                      // Elimina la categoria selezionata
-                      ref.read(categoryProvider.notifier).deleteCategory(category.id);
-                    },
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.edit, color: Colors.blue),
+                        onPressed: () => _showEditDialog(category),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.delete, color: Colors.red),
+                        onPressed: () {
+                          // Elimina la categoria selezionata
+                          ref.read(categoryProvider.notifier).deleteCategory(category.id);
+                        },
+                      ),
+                    ],
                   ),
                 );
               },
