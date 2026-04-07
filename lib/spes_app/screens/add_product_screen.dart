@@ -61,6 +61,7 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
   ];
 
   File? _imageFile;
+  String? _remoteImageUrl; // Per le immagini da Open Food Facts
   String? _selectedCategory;
   String? _rawOffData; // Memorizziamo i dati OFF per salvarli nel DB
 
@@ -159,7 +160,13 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
       _selectedCategory = existingProduct.category;
 
       if (existingProduct.imageUrl != null) {
+        if (existingProduct.imageUrl!.startsWith('http')) {
+          _remoteImageUrl = existingProduct.imageUrl;
+          _imageFile = null;
+        } else {
           _imageFile = File(existingProduct.imageUrl!);
+          _remoteImageUrl = null;
+        }
       }
       
       bool isFresh = searchBarcode.length == 7 && searchBarcode.startsWith('2');
@@ -219,6 +226,7 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
               _selectedCategory = categoryId;
             }
             
+            _remoteImageUrl = offProduct.imageUrl;
             _rawOffData = offProduct.rawOffData;
           });
 
@@ -259,6 +267,7 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
     if (pickedFile != null) {
       setState(() {
         _imageFile = File(pickedFile.path);
+        _remoteImageUrl = null; // L'immagine locale vince su quella remota
       });
     }
   }
@@ -311,7 +320,7 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
         weight: double.tryParse(_weightController.text.replaceAll(',', '.')),
         weightUnit: _weightUnit,
         pricePerKg: double.tryParse(_pricePerKgController.text),
-        imageUrl: localImagePath ?? (File(_barcodeController.text).existsSync() ? _barcodeController.text : null),
+        imageUrl: localImagePath ?? _remoteImageUrl ?? (File(_barcodeController.text).existsSync() ? _barcodeController.text : null),
         category: _selectedCategory,
         rawOffData: _rawOffData,
       );
@@ -410,12 +419,17 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
                                 borderRadius: BorderRadius.circular(12),
                                 border: Border.all(color: Colors.grey.shade300),
                               ),
-                              child: _imageFile != null
-                                  ? ClipRRect(
-                                      borderRadius: BorderRadius.circular(12),
-                                      child: Image.file(_imageFile!, fit: BoxFit.cover),
-                                    )
-                                  : const Icon(Icons.add_a_photo, size: 40, color: Colors.grey),
+                                child: _imageFile != null
+                                    ? ClipRRect(
+                                        borderRadius: BorderRadius.circular(12),
+                                        child: Image.file(_imageFile!, fit: BoxFit.cover),
+                                      )
+                                    : (_remoteImageUrl != null
+                                        ? ClipRRect(
+                                            borderRadius: BorderRadius.circular(12),
+                                            child: Image.network(_remoteImageUrl!, fit: BoxFit.cover, errorBuilder: (ctx, err, stack) => const Icon(Icons.broken_image, size: 40)),
+                                          )
+                                        : const Icon(Icons.add_a_photo, size: 40, color: Colors.grey)),
                             ),
                             Positioned(bottom: 0, right: 0, child: _buildImageAction(Icons.camera_alt, () => _pickImage(ImageSource.camera))),
                             Positioned(bottom: 0, left: 0, child: _buildImageAction(Icons.photo_library, () => _pickImage(ImageSource.gallery))),
