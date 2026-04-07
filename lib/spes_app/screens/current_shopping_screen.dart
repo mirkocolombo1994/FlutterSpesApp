@@ -13,7 +13,9 @@ import '../services/location_service.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
 import 'dart:io';
+import 'dart:async';
 import '../constants/app_strings.dart';
+import '../providers/settings_provider.dart';
 
 class CurrentShoppingScreen extends ConsumerStatefulWidget {
   const CurrentShoppingScreen({super.key});
@@ -24,6 +26,9 @@ class CurrentShoppingScreen extends ConsumerStatefulWidget {
 class _CurrentShoppingScreenState extends ConsumerState<CurrentShoppingScreen> {
 
   bool _gpsFetched = false;
+  Timer? _locationTimer;
+  bool _isCheckingLocation = false;
+  bool _isShowingDialog = false;
 
   @override
   void initState() {
@@ -37,7 +42,139 @@ class _CurrentShoppingScreenState extends ConsumerState<CurrentShoppingScreen> {
           }
         });
       }
+      _startLocationTimer();
     });
+  }
+
+  @override
+  void dispose() {
+    _locationTimer?.cancel();
+    super.dispose();
+  }
+
+  void _startLocationTimer() {
+    _locationTimer?.cancel();
+    final interval = ref.read(settingsProvider).locationCheckInterval;
+    _locationTimer = Timer.periodic(Duration(minutes: interval), (timer) {
+      _checkLocationChange();
+    });
+  }
+
+  Future<void> _checkLocationChange() async {
+    if (_isCheckingLocation || _isShowingDialog) return;
+    final activeStoreId = ref.read(activeStoreIdProvider);
+    if (activeStoreId == null) return;
+
+    _isCheckingLocation = true;
+    try {
+      if (!await Geolocator.isLocationServiceEnabled()) return;
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied || permission == LocationPermission.deniedForever) return;
+
+      final pos = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high);
+      final stores = ref.read(storeProvider);
+      final activeStore = stores.where((s) => s.id == activeStoreId).firstOrNull;
+
+      if (activeStore != null && activeStore.latitude != null && activeStore.longitude != null) {
+        final distance = const Distance();
+        final dToActive = distance.as(LengthUnit.Meter, LatLng(pos.latitude, pos.longitude), LatLng(activeStore.latitude!, activeStore.longitude!));
+
+        // Se siamo ancora "dentro" (250m), non facciamo nulla
+        if (dToActive < 250) return;
+
+        // Cerchiamo se siamo vicini a un ALTRO store (radius 100m)
+        Store? foundStore;
+        for (var s in stores) {
+          if (s.id == activeStoreId) continue;
+          if (s.latitude != null && s.longitude != null) {
+            final d = distance.as(LengthUnit.Meter, LatLng(pos.latitude, pos.longitude), LatLng(s.latitude!, s.longitude!));
+            if (d < 100) {
+              foundStore = s;
+              break;
+            }
+          }
+        }
+
+        // Se non trovato in DB, cerchiamo online (Overpass/Nominatim)
+        if (foundStore == null) {
+          final placeName = await LocationService.lookupSupermarketName(pos.latitude, pos.longitude);
+          if (placeName != null) {
+             // Verifichiamo che non sia lo stesso nome dello store attivo (magari stessa catena)
+             if (placeName.toLowerCase() != activeStore.name.toLowerCase()) {
+               _showLocationChangeDialog(placeName, pos.latitude, pos.longitude);
+             }
+          }
+        } else {
+          _showLocationChangeDialog(foundStore.name, foundStore.latitude!, foundStore.longitude!, existingStore: foundStore);
+        }
+      }
+    } catch (_) {
+    } finally {
+      _isCheckingLocation = false;
+    }
+  }
+
+  void _showLocationChangeDialog(String storeName, double lat, double lon, {Store? existingStore}) {
+    if (!mounted || _isShowingDialog) return;
+    
+    setState(() => _isShowingDialog = true);
+    
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        title: const Text(AppStrings.locationChangedTitle),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('${AppStrings.locationChangedMessage}$storeName.'),
+            const SizedBox(height: 12),
+            const Text(AppStrings.locationChangedQuestion),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              setState(() => _isShowingDialog = false);
+            },
+            child: const Text(AppStrings.stayAtCurrentStore),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              String targetStoreId;
+              if (existingStore != null) {
+                targetStoreId = existingStore.id;
+              } else {
+                final newStore = Store(
+                  id: const Uuid().v4(),
+                  name: storeName,
+                  chain: storeName,
+                  latitude: lat,
+                  longitude: lon,
+                );
+                await ref.read(storeProvider.notifier).addStore(newStore);
+                targetStoreId = newStore.id;
+              }
+
+              ref.read(activeStoreIdProvider.notifier).setId(targetStoreId);
+              ref.read(cartProvider.notifier).clear();
+              
+              if (mounted) {
+                Navigator.pop(ctx);
+                setState(() => _isShowingDialog = false);
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                  content: Text('${AppStrings.navPuntiVendita}: $storeName'),
+                  backgroundColor: Colors.indigo,
+                ));
+              }
+            },
+            child: const Text(AppStrings.switchToNewStore),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<String?> _fetchGpsAndStore(WidgetRef ref) async {
