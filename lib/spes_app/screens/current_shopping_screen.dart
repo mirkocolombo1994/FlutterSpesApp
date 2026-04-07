@@ -148,30 +148,7 @@ class _CurrentShoppingScreenState extends ConsumerState<CurrentShoppingScreen> {
                     final isFresh = item.barcode.length == 7 && item.barcode.startsWith('2');
                     
                     return ListTile(
-                      leading: item.imageUrl != null && File(item.imageUrl!).existsSync()
-                        ? Container(
-                            width: 48,
-                            height: 48,
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(8),
-                              image: DecorationImage(
-                                image: FileImage(File(item.imageUrl!)),
-                                fit: BoxFit.cover,
-                              ),
-                            ),
-                            child: Align(
-                              alignment: Alignment.bottomRight,
-                              child: Container(
-                                padding: const EdgeInsets.all(2),
-                                decoration: const BoxDecoration(color: Colors.white70, shape: BoxShape.circle),
-                                child: Text('${item.quantity}x', style: const TextStyle(color: Colors.indigo, fontWeight: FontWeight.bold, fontSize: 10)),
-                              ),
-                            ),
-                          )
-                        : CircleAvatar(
-                            backgroundColor: Colors.indigo.shade100,
-                            child: Text('${item.quantity}x', style: const TextStyle(color: Colors.indigo, fontWeight: FontWeight.bold, fontSize: 13)),
-                          ),
+                      leading: _buildItemLeading(item),
                       title: Row(
                         children: [
                           Expanded(child: Text(item.name, style: const TextStyle(fontWeight: FontWeight.bold))),
@@ -399,6 +376,44 @@ class _CurrentShoppingScreenState extends ConsumerState<CurrentShoppingScreen> {
         ),
       ],
     );
+  }
+
+  Widget _buildItemLeading(dynamic item) {
+    ImageProvider? image;
+    if (item.imageUrl != null) {
+      if (item.imageUrl!.startsWith('http')) {
+        image = NetworkImage(item.imageUrl!);
+      } else if (File(item.imageUrl!).existsSync()) {
+        image = FileImage(File(item.imageUrl!));
+      }
+    }
+
+    if (image != null) {
+      return Container(
+        width: 48,
+        height: 48,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(8),
+          image: DecorationImage(
+            image: image,
+            fit: BoxFit.cover,
+          ),
+        ),
+        child: Align(
+          alignment: Alignment.bottomRight,
+          child: Container(
+            padding: const EdgeInsets.all(2),
+            decoration: const BoxDecoration(color: Colors.white70, shape: BoxShape.circle),
+            child: Text('${item.quantity}x', style: const TextStyle(color: Colors.indigo, fontWeight: FontWeight.bold, fontSize: 10)),
+          ),
+        ),
+      );
+    } else {
+      return CircleAvatar(
+        backgroundColor: Colors.indigo.shade100,
+        child: Text('${item.quantity}x', style: const TextStyle(color: Colors.indigo, fontWeight: FontWeight.bold, fontSize: 13)),
+      );
+    }
   }
 
   void _showStoreSelector(BuildContext context, WidgetRef ref, List<Store> stores) {

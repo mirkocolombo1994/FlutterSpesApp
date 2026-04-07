@@ -200,25 +200,38 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
   }
 
   Widget _buildImageHeader(Product product) {
-    if (product.imageUrl != null && File(product.imageUrl!).existsSync()) {
-      return Container(
-        width: double.infinity,
-        height: 250,
-        decoration: BoxDecoration(
-          image: DecorationImage(
-            image: FileImage(File(product.imageUrl!)),
-            fit: BoxFit.cover,
+    if (product.imageUrl != null) {
+      if (product.imageUrl!.startsWith('http')) {
+        return Container(
+          width: double.infinity,
+          height: 250,
+          decoration: BoxDecoration(
+            image: DecorationImage(
+              image: NetworkImage(product.imageUrl!),
+              fit: BoxFit.cover,
+            ),
           ),
-        ),
-      );
-    } else {
-      return Container(
-        width: double.infinity,
-        height: 150,
-        color: Colors.blueGrey.shade50,
-        child: const Icon(Icons.inventory, size: 80, color: Colors.blueGrey),
-      );
+        );
+      } else if (File(product.imageUrl!).existsSync()) {
+        return Container(
+          width: double.infinity,
+          height: 250,
+          decoration: BoxDecoration(
+            image: DecorationImage(
+              image: FileImage(File(product.imageUrl!)),
+              fit: BoxFit.cover,
+            ),
+          ),
+        );
+      }
     }
+    
+    return Container(
+      width: double.infinity,
+      height: 150,
+      color: Colors.blueGrey.shade50,
+      child: const Icon(Icons.inventory, size: 80, color: Colors.blueGrey),
+    );
   }
 
   Widget _buildMainInfo(Product product, List<Category> categories) {
