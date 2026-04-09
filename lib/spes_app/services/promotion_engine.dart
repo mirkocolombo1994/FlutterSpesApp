@@ -8,13 +8,21 @@ abstract class PromotionRule {
   
   /// Numero totale di articoli necessari per completare l'offerta (es. 2 per 1+1, 3 per 3x2).
   int get requiredTotalItems;
+
+  /// Numero di articoli che devono essere pagati per ogni set della promo.
+  /// Esempio: 1+1 -> 1 pagato; 3x2 -> 2 pagati.
+  int get paidPiecesPerSet;
   
   /// Numero di articoli che sono considerati "omaggio" nell'offerta.
   int get freeItemsCount;
 
   /// Indica se l'utente può modificare manualmente la quantità nel carrello.
-  /// Per promozioni fisse come 1+1 o 3x2, questo dovrebbe essere false.
+  /// Per promozioni fisse come 1+1 o 3x2, questo dovrebbe essere false per i prodotti omaggio.
   bool get canModifyQuantity;
+
+  /// Indica se l'aggiunta di una determinata quantità di prodotti paganti "fa scattare" 
+  /// la necessità di scansionare i prodotti omaggio del set.
+  bool shouldTriggerScan(int currentQuantity);
 
   /// Restituisce il messaggio da mostrare all'utente durante la scansione.
   String getScanPrompt(int currentScanned);
@@ -30,10 +38,16 @@ class OnePlusOneRule implements PromotionRule {
   int get requiredTotalItems => 2;
 
   @override
+  int get paidPiecesPerSet => 1;
+
+  @override
   int get freeItemsCount => 1;
 
   @override
   bool get canModifyQuantity => false;
+
+  @override
+  bool shouldTriggerScan(int currentQuantity) => currentQuantity % 1 == 0;
 
   @override
   String getScanPrompt(int currentScanned) {
@@ -51,10 +65,16 @@ class ThreeForTwoRule implements PromotionRule {
   int get requiredTotalItems => 3;
 
   @override
+  int get paidPiecesPerSet => 2;
+
+  @override
   int get freeItemsCount => 1;
 
   @override
   bool get canModifyQuantity => false;
+
+  @override
+  bool shouldTriggerScan(int currentQuantity) => currentQuantity % 2 == 0;
 
   @override
   String getScanPrompt(int currentScanned) {

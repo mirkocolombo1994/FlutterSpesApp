@@ -1,4 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:uuid/uuid.dart';
+import '../services/promotion_engine.dart';
 import 'price_history_provider.dart';
 import 'product_provider.dart';
 
@@ -69,23 +71,46 @@ class CartNotifier extends Notifier<List<CartItem>> {
   List<CartItem> build() => [];
 
   void addItem(CartItem item) {
-    // [DESIGN PATTERN: Composite/Condition] 
-    // Se è un prodotto omaggio o ha un parentId, lo trattiamo sempre come voce separata 
-    // per non "fonderlo" con la versione pagata dello stesso barcode.
-    if (item.isPromoFree || item.parentId != null) {
-      state = [...state, item];
-      return;
+    // [DESIGN PATTERN: Composite / Registry Lookup]
+    // Gestione accorpamento intelligente per prodotti in promozione.
+    
+    // 1. Se è un prodotto "omaggio" (child), cerchiamo se esiste già un omaggio dello stesso tipo per lo stesso genitore
+    if (item.parentId != null) {
+      final idx = state.indexWhere((e) => e.parentId == item.parentId && e.barcode == item.barcode && e.isPromoFree);
+      if (idx >= 0) {
+        final curr = state[idx];
+        state = [
+          ...state.sublist(0, idx),
+          curr.copyWith(quantity: curr.quantity + item.quantity),
+          ...state.sublist(idx + 1),
+        ];
+        return;
+      }
     }
 
-    // Se lo stesso prodotto allo stesso prezzo è già nel carrello, aumenta solo la quantità
+    // 2. Se è un prodotto "pagante" (parent) con promo attiva, lo accorpiamo se barcode e promo coincidono
+    if (item.promoType != null && !item.isPromoFree) {
+       final idx = state.indexWhere((e) => e.barcode == item.barcode && e.promoType == item.promoType && !e.isPromoFree);
+       if (idx >= 0) {
+        final curr = state[idx];
+        state = [
+          ...state.sublist(0, idx),
+          curr.copyWith(quantity: curr.quantity + item.quantity),
+          ...state.sublist(idx + 1),
+        ];
+        return;
+      }
+    }
+
+    // 3. Altrimenti, se lo stesso prodotto allo stesso prezzo è già nel carrello, aumenta solo la quantità
     final idx = state.indexWhere(
-      (e) => e.barcode == item.barcode && e.price == item.price && !e.isPromoFree,
+      (e) => e.barcode == item.barcode && e.price == item.price && !e.isPromoFree && e.parentId == null,
     );
     if (idx >= 0) {
       final curr = state[idx];
       state = [
         ...state.sublist(0, idx),
-        curr.copyWith(quantity: curr.quantity + 1),
+        curr.copyWith(quantity: curr.quantity + item.quantity),
         ...state.sublist(idx + 1),
       ];
     } else {
@@ -112,14 +137,73 @@ class CartNotifier extends Notifier<List<CartItem>> {
     }).toList();
   }
 
+  /// [DESIGN PATTERN: Reactive Sync / State Transition]
+  /// Aggiorna la quantità di un articolo. La sincronizzazione degli omaggi in aumento è gestita dalla UI,
+  /// ma il REVERT al decremento è gestito qui per sicurezza.
   void updateQuantity(String id, int newQuantity) {
     if (newQuantity <= 0) return;
-    state = state.map((item) {
+    
+    final itemIdx = state.indexWhere((e) => e.id == id);
+    if (itemIdx == -1) return;
+    final parentItem = state[itemIdx];
+
+    List<CartItem> newState = state.map((item) {
       if (item.id == id) {
         return item.copyWith(quantity: newQuantity);
       }
       return item;
     }).toList();
+
+    // Revert logic: The user decreased the paid quantity, check if we must invalidate some free items
+    if (newQuantity < parentItem.quantity && !parentItem.isPromoFree) {
+      final rule = PromotionEngine.getRule(parentItem.promoType);
+      if (rule != null) {
+        final allowedFreeCount = (newQuantity ~/ rule.paidPiecesPerSet).toInt() * rule.freeItemsCount.toInt();
+        
+        final connectedFreeItems = newState.where((i) => i.parentId == id && i.isPromoFree).toList();
+        final currentFreeCount = connectedFreeItems.fold<int>(0, (sum, i) => sum + i.quantity);
+
+        if (currentFreeCount > allowedFreeCount) {
+          final int excessAmount = currentFreeCount - allowedFreeCount;
+          
+          if (allowedFreeCount <= 0) {
+            // Nessun omaggio consentito, li trasformiamo tutti in paganti svincolati
+            newState = newState.map((item) {
+               if (item.parentId == id && item.isPromoFree) {
+                 return item.copyWith(
+                   isPromoFree: false,
+                   parentId: null,
+                   price: item.originalPrice ?? item.price,
+                   originalPrice: null,
+                 );
+               }
+               return item;
+            }).toList();
+          } else {
+             // Riduciamo la quantità dell'omaggio a quella massima consentita
+             newState = newState.map((item) {
+               if (item.parentId == id && item.isPromoFree) {
+                 return item.copyWith(quantity: allowedFreeCount);
+               }
+               return item;
+             }).toList();
+             
+             // Aggiungiamo il residuo come nuovo prodotto pagante
+             final freeItemRef = connectedFreeItems.first;
+             newState.add(freeItemRef.copyWith(
+               id: const Uuid().v4(),
+               quantity: excessAmount,
+               isPromoFree: false,
+               parentId: null,
+               price: freeItemRef.originalPrice ?? freeItemRef.price,
+               originalPrice: null,
+             ));
+          }
+        }
+      }
+    }
+
+    state = newState;
   }
 
   void clear() {

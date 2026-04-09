@@ -348,28 +348,43 @@ class _CurrentShoppingScreenState extends ConsumerState<CurrentShoppingScreen> {
                             ),
                         ],
                       ),
-                      trailing: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          IconButton(
-                            icon: const Icon(Icons.remove_circle_outline, color: Colors.indigo),
-                            onPressed: (item.quantity > 1 && (PromotionEngine.getRule(item.promoType)?.canModifyQuantity ?? true) && !item.isPromoFree && item.parentId == null)
-                                ? () => ref.read(cartProvider.notifier).updateQuantity(item.id, item.quantity - 1)
-                                : null,
-                          ),
-                          Text('${item.quantity}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                          IconButton(
-                            icon: const Icon(Icons.add_circle_outline, color: Colors.indigo),
-                            onPressed: ((PromotionEngine.getRule(item.promoType)?.canModifyQuantity ?? true) && !item.isPromoFree && item.parentId == null)
-                                ? () => ref.read(cartProvider.notifier).updateQuantity(item.id, item.quantity + 1)
-                                : null,
-                          ),
-                          IconButton(
-                            icon: const Icon(Icons.delete, color: Colors.red),
-                            onPressed: () => ref.read(cartProvider.notifier).removeItem(item.id),
-                          ),
-                        ],
-                      ),
+                      trailing: (() {
+                        final isChild = item.isPromoFree || item.parentId != null;
+                        final canModify = !isChild; // I genitori sono sempre modificabili per gestire i multiset
+                        
+                        return Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            IconButton(
+                              icon: Icon(Icons.remove_circle_outline, color: (item.quantity > 1 && canModify) ? Colors.indigo : Colors.grey),
+                              onPressed: (item.quantity > 1 && canModify)
+                                  ? () => ref.read(cartProvider.notifier).updateQuantity(item.id, item.quantity - 1)
+                                  : null,
+                            ),
+                            Text('${item.quantity}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                            IconButton(
+                              icon: Icon(Icons.add_circle_outline, color: canModify ? Colors.indigo : Colors.grey),
+                              onPressed: canModify
+                                  ? () async {
+                                      final newQty = item.quantity + 1;
+                                      // Aggiorniamo la quantità
+                                      ref.read(cartProvider.notifier).updateQuantity(item.id, newQty);
+                                      
+                                      // Verifichiamo se "scatta" la soglia per un nuovo omaggio
+                                      final rule = PromotionEngine.getRule(item.promoType);
+                                      if (rule != null && rule.shouldTriggerScan(newQty) && mounted) {
+                                        await _handlePromoScanning(context, ref, item.copyWith(quantity: newQty), rule);
+                                      }
+                                    }
+                                  : null,
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.delete, color: Colors.red),
+                              onPressed: () => ref.read(cartProvider.notifier).removeItem(item.id),
+                            ),
+                          ],
+                        );
+                      })(),
                     );
                   },
                 ),
@@ -544,7 +559,13 @@ class _CurrentShoppingScreenState extends ConsumerState<CurrentShoppingScreen> {
                   }
 
                   if (promoRule != null && isStillValid) {
-                    await _handlePromoScanning(context, ref, newItem, promoRule);
+                    // Verifichiamo la quantità effettiva nel carrello (potrebbe essere accorpata)
+                    final cart = ref.read(cartProvider);
+                    final itemInCart = cart.firstWhere((i) => i.barcode == finalBarcodeToAdd && !i.isPromoFree);
+                    
+                    if (promoRule.shouldTriggerScan(itemInCart.quantity)) {
+                      await _handlePromoScanning(context, ref, itemInCart, promoRule);
+                    }
                   }
                 }
               }
@@ -555,14 +576,10 @@ class _CurrentShoppingScreenState extends ConsumerState<CurrentShoppingScreen> {
     );
   }
 
-  /// Gestisce la scansione dei prodotti aggiuntivi richiesti da una promozione (es. 1+1, 3x2).
-  /// [DESIGN PATTERN: Template Method / Iterator]
-  /// Questo metodo definisce lo scheletro dell'algoritmo di acquisizione dei prodotti
-  /// delegando alla "Strategy" (PromotionRule) il numero di pezzi e i prompt specifici.
+  /// Gestisce la scansione dei prodotti in omaggio quando scatta la soglia di una promozione.
   Future<void> _handlePromoScanning(BuildContext context, WidgetRef ref, CartItem parent, PromotionRule rule) async {
-    // Calcoliamo quanti altri pezzi servono (es. 1 in più per 1+1, 2 in più per 3x2)
-    final itemsToScan = rule.requiredTotalItems - 1;
-    final freeStartingAt = rule.requiredTotalItems - rule.freeItemsCount + 1;
+    // Quando scatta la soglia, dobbiamo scansionare solo il numero di pezzi omaggio previsti
+    final itemsToScan = rule.freeItemsCount;
 
     for (int i = 1; i <= itemsToScan; i++) {
       if (!mounted) return;
@@ -571,7 +588,8 @@ class _CurrentShoppingScreenState extends ConsumerState<CurrentShoppingScreen> {
         context: context,
         builder: (ctx) => AlertDialog(
           title: Text(rule.type),
-          content: Text(rule.getScanPrompt(i)),
+          // Usiamo un messaggio specifico: "Soglia raggiunta! Scansiona l'omaggio"
+          content: Text("Ottimo! Hai raggiunto la soglia per l'offerta. Scansiona ora il prodotto in omaggio."),
           actions: [
             TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Salta')),
             ElevatedButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Scansiona')),
@@ -596,19 +614,19 @@ class _CurrentShoppingScreenState extends ConsumerState<CurrentShoppingScreen> {
         final storeHistory = currentStoreId != null ? history.where((h) => h.storeId == currentStoreId).firstOrNull : null;
         final originalPrice = storeHistory?.price ?? (history.isNotEmpty ? history.first.price : 0.0);
 
-        final isFree = (i + 1) >= freeStartingAt;
+        const isFree = true; // In questo metodo scansioniamo solo gli omaggi
 
         ref.read(cartProvider.notifier).addItem(
           CartItem(
             id: const Uuid().v4(),
             barcode: scannedCode,
             name: product?.name ?? AppStrings.unknownProduct,
-            price: isFree ? 0.0 : originalPrice,
-            originalPrice: isFree ? originalPrice : null,
+            price: 0.0,
+            originalPrice: originalPrice,
             isPromoFree: isFree,
             parentId: parent.id, // Collegamento per cancellazione a cascata
             imageUrl: product?.imageUrl,
-            status: isFree ? CartItemStatus.ok : (storeHistory == null ? CartItemStatus.error : CartItemStatus.ok),
+            status: CartItemStatus.ok,
           )
         );
       } else {

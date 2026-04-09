@@ -7,6 +7,9 @@ import '../providers/product_provider.dart';
 import '../providers/store_provider.dart';
 import '../providers/price_history_provider.dart';
 import '../providers/category_provider.dart';
+import '../providers/promotion_provider.dart';
+import '../models/promotion.dart';
+import '../services/spes_app_database_helper.dart';
 import 'package:intl/intl.dart';
 import 'package:uuid/uuid.dart';
 import 'barcode_scanner_screen.dart';
@@ -372,6 +375,29 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
           promoValidUntil: expirationTimestamp,
         );
         await ref.read(priceHistoryProvider).addPriceHistory(prHistory);
+
+        // [NUOVO] Creazione automatica Promozione e Linking
+        if (cleanPromoType != null) {
+          final promos = ref.read(promotionProvider);
+          final existingPromo = promos.where((p) => p.storeId == _selectedStoreId && p.name == cleanPromoType).firstOrNull;
+          
+          String promoIdToLink;
+          if (existingPromo == null) {
+             promoIdToLink = const Uuid().v4();
+             final newPromo = Promotion(
+               id: promoIdToLink,
+               name: cleanPromoType,
+               storeId: _selectedStoreId!,
+               discountPercentage: _promoType == AppStrings.promoDiscountPercent ? (double.tryParse(_discountPercentController.text) ?? 0.0) : 0.0,
+               validFrom: DateTime.now(),
+               validUntil: _promoValidUntil ?? DateTime.now().add(const Duration(days: 30)), // Fallback 30gg
+             );
+             await ref.read(promotionProvider.notifier).addPromotion(newPromo);
+          } else {
+             promoIdToLink = existingPromo.id;
+          }
+          await SpesAppDatabaseHelper.instance.linkProductToPromotion(promoIdToLink, finalBarcode);
+        }
       }
 
       if (mounted) Navigator.pop(context, finalBarcode);

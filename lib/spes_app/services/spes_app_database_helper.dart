@@ -26,7 +26,7 @@ class SpesAppDatabaseHelper {
 
     return await openDatabase(
       path,
-      version: 8,
+      version: 9,
       onCreate: _createDB,
       onUpgrade: _upgradeDB,
       onConfigure: (db) async {
@@ -85,6 +85,19 @@ class SpesAppDatabaseHelper {
         await db.execute('ALTER TABLE products ADD COLUMN raw_off_data TEXT');
       } catch (_) {}
     }
+    if (oldVersion < 9) {
+      try {
+        await db.execute('''
+          CREATE TABLE promotion_products (
+            promo_id TEXT,
+            product_barcode TEXT,
+            PRIMARY KEY (promo_id, product_barcode),
+            FOREIGN KEY (promo_id) REFERENCES promotions (id) ON DELETE CASCADE,
+            FOREIGN KEY (product_barcode) REFERENCES products (barcode) ON DELETE CASCADE
+          )
+        ''');
+      } catch (_) {}
+    }
   }
 
   Future _createDB(Database db, int version) async {
@@ -132,6 +145,16 @@ class SpesAppDatabaseHelper {
         image_url TEXT,
         category TEXT,
         raw_off_data TEXT
+      )
+    ''');
+    
+    await db.execute('''
+      CREATE TABLE promotion_products (
+        promo_id TEXT,
+        product_barcode TEXT,
+        PRIMARY KEY (promo_id, product_barcode),
+        FOREIGN KEY (promo_id) REFERENCES promotions (id) ON DELETE CASCADE,
+        FOREIGN KEY (product_barcode) REFERENCES products (barcode) ON DELETE CASCADE
       )
     ''');
 
@@ -287,6 +310,34 @@ class SpesAppDatabaseHelper {
   Future<void> deletePromotion(String id) async {
     final db = await instance.database;
     await db.delete('promotions', where: 'id = ?', whereArgs: [id]);
+  }
+
+  // --- PROMOTION PRODUCTS METHODS ---
+  Future<void> linkProductToPromotion(String promoId, String productBarcode) async {
+    final db = await instance.database;
+    await db.insert('promotion_products', {
+      'promo_id': promoId,
+      'product_barcode': productBarcode,
+    }, conflictAlgorithm: ConflictAlgorithm.ignore);
+  }
+
+  Future<void> unlinkProductFromPromotion(String promoId, String productBarcode) async {
+    final db = await instance.database;
+    await db.delete('promotion_products', 
+      where: 'promo_id = ? AND product_barcode = ?', 
+      whereArgs: [promoId, productBarcode]);
+  }
+
+  Future<List<Product>> getProductsForPromotion(String promoId) async {
+    final db = await instance.database;
+    // Join promotion_products with products
+    final List<Map<String, dynamic>> maps = await db.rawQuery('''
+      SELECT p.* 
+      FROM products p
+      INNER JOIN promotion_products pp ON p.barcode = pp.product_barcode
+      WHERE pp.promo_id = ?
+    ''', [promoId]);
+    return List.generate(maps.length, (i) => Product.fromMap(maps[i]));
   }
 
   // --- PRICE HISTORY METHODS ---

@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/promotion.dart';
+import '../models/product.dart';
 import '../services/spes_app_database_helper.dart';
 
 final promotionProvider = NotifierProvider<PromotionNotifier, List<Promotion>>(() {
@@ -26,5 +27,17 @@ class PromotionNotifier extends Notifier<List<Promotion>> {
   Future<void> removePromotion(String id) async {
     await SpesAppDatabaseHelper.instance.deletePromotion(id);
     await _loadPromotions();
+  }
+
+  Future<List<Product>> getProductsForPromotion(String promoId) async {
+    return await SpesAppDatabaseHelper.instance.getProductsForPromotion(promoId);
+  }
+
+  Future<void> linkProduct(String promoId, String barcode) async {
+    await SpesAppDatabaseHelper.instance.linkProductToPromotion(promoId, barcode);
+  }
+
+  Future<void> unlinkProduct(String promoId, String barcode) async {
+    await SpesAppDatabaseHelper.instance.unlinkProductFromPromotion(promoId, barcode);
   }
 }

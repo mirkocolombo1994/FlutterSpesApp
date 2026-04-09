@@ -6,6 +6,8 @@ import '../constants/app_strings.dart';
 import '../models/promotion.dart';
 import '../providers/promotion_provider.dart';
 import '../providers/store_provider.dart';
+import '../models/product.dart';
+import 'barcode_scanner_screen.dart';
 
 class PromotionsScreen extends ConsumerStatefulWidget {
   const PromotionsScreen({super.key});
@@ -54,8 +56,16 @@ class _PromotionsScreenState extends ConsumerState<PromotionsScreen> {
                       ],
                     ),
                     trailing: const Icon(Icons.chevron_right),
-                    onTap: () => _openPromotionDialog(existing: promo),
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => PromotionDetailScreen(promotion: promo),
+                        ),
+                      );
+                    },
                     onLongPress: () {
+                      // Optionally, dialog for deletion
                       ref.read(promotionProvider.notifier).removePromotion(promo.id);
                     },
                   ),
@@ -197,6 +207,97 @@ class _PromotionDialogState extends ConsumerState<_PromotionDialog> {
         TextButton(onPressed: () => Navigator.pop(context), child: const Text(AppStrings.cancel)),
         ElevatedButton(onPressed: _save, child: const Text(AppStrings.add)),
       ],
+    );
+  }
+}
+
+class PromotionDetailScreen extends ConsumerStatefulWidget {
+  final Promotion promotion;
+  const PromotionDetailScreen({super.key, required this.promotion});
+
+  @override
+  ConsumerState<PromotionDetailScreen> createState() => _PromotionDetailScreenState();
+}
+
+class _PromotionDetailScreenState extends ConsumerState<PromotionDetailScreen> {
+  List<Product> _products = [];
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadProducts();
+  }
+
+  Future<void> _loadProducts() async {
+    setState(() => _isLoading = true);
+    final products = await ref.read(promotionProvider.notifier).getProductsForPromotion(widget.promotion.id);
+    setState(() {
+      _products = products;
+      _isLoading = false;
+    });
+  }
+
+  Future<void> _addProduct() async {
+    final String? scannedCode = await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const BarcodeScannerScreen()),
+    );
+
+    if (scannedCode != null) {
+      await ref.read(promotionProvider.notifier).linkProduct(widget.promotion.id, scannedCode);
+      await _loadProducts();
+    }
+  }
+
+  Future<void> _removeProduct(String barcode) async {
+    await ref.read(promotionProvider.notifier).unlinkProduct(widget.promotion.id, barcode);
+    await _loadProducts();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(widget.promotion.name),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.edit),
+            onPressed: () {
+               showDialog(
+                context: context,
+                builder: (context) => _PromotionDialog(existing: widget.promotion),
+              ).then((_) {
+                 // Potrebbe essere cambiato il nome
+                 setState(() {});
+              });
+            },
+          )
+        ],
+      ),
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : _products.isEmpty
+              ? const Center(child: Text("Nessun prodotto associato a questa promozione."))
+              : ListView.builder(
+                  itemCount: _products.length,
+                  itemBuilder: (context, index) {
+                    final product = _products[index];
+                    return ListTile(
+                      title: Text(product.name),
+                      subtitle: Text(product.barcode),
+                      trailing: IconButton(
+                        icon: const Icon(Icons.remove_circle, color: Colors.red),
+                        onPressed: () => _removeProduct(product.barcode),
+                      ),
+                    );
+                  },
+                ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: _addProduct,
+        icon: const Icon(Icons.add_a_photo),
+        label: const Text("Associa Prodotto"),
+      ),
     );
   }
 }
