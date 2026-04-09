@@ -519,16 +519,32 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
                       const SizedBox(height: 8),
                       SwitchListTile(
                         title: const Text('Prezzo in Promozione?'),
-                        subtitle: const Text('Potrai specificare i dettagli in seguito', style: TextStyle(fontSize: 11)),
                         value: _promoType != AppStrings.promoNone,
                         onChanged: (val) {
                           setState(() {
-                            _promoType = val ? AppStrings.promoOther : AppStrings.promoNone;
+                            _promoType = val ? AppStrings.promo1plus1 : AppStrings.promoNone;
                           });
                         },
                         contentPadding: EdgeInsets.zero,
                         activeColor: Colors.indigo,
                       ),
+                      if (_promoType != AppStrings.promoNone) ...[
+                        const SizedBox(height: 8),
+                        DropdownButtonFormField<String>(
+                          decoration: const InputDecoration(labelText: AppStrings.promotionLabel, border: OutlineInputBorder()),
+                          value: _promoType,
+                          items: _promoTypes.map((pt) => DropdownMenuItem(value: pt, child: Text(pt))).toList(),
+                          onChanged: (val) => setState(() => _promoType = val),
+                        ),
+                        if (_promoType == AppStrings.promoDiscountPercent) ...[
+                          const SizedBox(height: 16),
+                          TextFormField(
+                            controller: _discountPercentController,
+                            decoration: const InputDecoration(labelText: AppStrings.discountPercentLabel, border: OutlineInputBorder()),
+                            keyboardType: TextInputType.number,
+                          ),
+                        ],
+                      ],
                     ],
                   ),
                 ),

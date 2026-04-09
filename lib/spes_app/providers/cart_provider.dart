@@ -13,6 +13,9 @@ class CartItem {
   final String? promoType; // Sconto, 1+1, etc.
   final String? imageUrl;
   final CartItemStatus status;
+  final bool isPromoFree; // Indica se il prodotto è omaggio (es. il secondo in un 1+1)
+  final String? parentId; // ID dell'articolo "pagante" a cui questo omaggio è collegato
+  final double? originalPrice; // Prezzo originale da mostrare barrato
   int quantity;
 
   CartItem({
@@ -24,8 +27,41 @@ class CartItem {
     this.promoType,
     this.imageUrl,
     this.status = CartItemStatus.ok,
+    this.isPromoFree = false,
+    this.parentId,
+    this.originalPrice,
     this.quantity = 1,
   });
+
+  CartItem copyWith({
+    String? id,
+    String? barcode,
+    String? name,
+    double? price,
+    double? unitPrice,
+    String? promoType,
+    String? imageUrl,
+    CartItemStatus? status,
+    bool? isPromoFree,
+    String? parentId,
+    double? originalPrice,
+    int? quantity,
+  }) {
+    return CartItem(
+      id: id ?? this.id,
+      barcode: barcode ?? this.barcode,
+      name: name ?? this.name,
+      price: price ?? this.price,
+      unitPrice: unitPrice ?? this.unitPrice,
+      promoType: promoType ?? this.promoType,
+      imageUrl: imageUrl ?? this.imageUrl,
+      status: status ?? this.status,
+      isPromoFree: isPromoFree ?? this.isPromoFree,
+      parentId: parentId ?? this.parentId,
+      originalPrice: originalPrice ?? this.originalPrice,
+      quantity: quantity ?? this.quantity,
+    );
+  }
 }
 
 class CartNotifier extends Notifier<List<CartItem>> {
@@ -33,25 +69,23 @@ class CartNotifier extends Notifier<List<CartItem>> {
   List<CartItem> build() => [];
 
   void addItem(CartItem item) {
+    // [DESIGN PATTERN: Composite/Condition] 
+    // Se è un prodotto omaggio o ha un parentId, lo trattiamo sempre come voce separata 
+    // per non "fonderlo" con la versione pagata dello stesso barcode.
+    if (item.isPromoFree || item.parentId != null) {
+      state = [...state, item];
+      return;
+    }
+
     // Se lo stesso prodotto allo stesso prezzo è già nel carrello, aumenta solo la quantità
     final idx = state.indexWhere(
-      (e) => e.barcode == item.barcode && e.price == item.price,
+      (e) => e.barcode == item.barcode && e.price == item.price && !e.isPromoFree,
     );
     if (idx >= 0) {
       final curr = state[idx];
       state = [
         ...state.sublist(0, idx),
-        CartItem(
-          id: curr.id,
-          barcode: curr.barcode,
-          name: curr.name,
-          price: curr.price,
-          unitPrice: curr.unitPrice,
-          promoType: curr.promoType,
-          imageUrl: curr.imageUrl,
-          status: curr.status,
-          quantity: curr.quantity + 1,
-        ),
+        curr.copyWith(quantity: curr.quantity + 1),
         ...state.sublist(idx + 1),
       ];
     } else {
@@ -59,25 +93,30 @@ class CartNotifier extends Notifier<List<CartItem>> {
     }
   }
 
+  /// [DESIGN PATTERN: State Transition / Reactive Update]
+  /// Rimuove un articolo dal carrello.
+  /// Se viene rimosso un articolo "padre", gli articoli omaggio collegati perdono il beneficio
+  /// della promozione e tornano al loro prezzo originale.
   void removeItem(String id) {
-    state = state.where((e) => e.id != id).toList();
+    state = state.where((item) => item.id != id).map((item) {
+      if (item.parentId == id) {
+        // Se l'elemento era collegato a quello rimosso, torna a prezzo pieno
+        return item.copyWith(
+          isPromoFree: false,
+          parentId: null,
+          price: item.originalPrice ?? item.price,
+          originalPrice: null,
+        );
+      }
+      return item;
+    }).toList();
   }
 
   void updateQuantity(String id, int newQuantity) {
     if (newQuantity <= 0) return;
     state = state.map((item) {
       if (item.id == id) {
-        return CartItem(
-          id: item.id,
-          barcode: item.barcode,
-          name: item.name,
-          price: item.price,
-          unitPrice: item.unitPrice,
-          promoType: item.promoType,
-          imageUrl: item.imageUrl,
-          status: item.status,
-          quantity: newQuantity,
-        );
+        return item.copyWith(quantity: newQuantity);
       }
       return item;
     }).toList();
@@ -94,6 +133,12 @@ class CartNotifier extends Notifier<List<CartItem>> {
 
     List<CartItem> newList = [];
     for (var item in state) {
+      // Gli omaggi non ricalcolano il prezzo (rimangono 0)
+      if (item.isPromoFree) {
+        newList.add(item);
+        continue;
+      }
+
       final history = await historyNotifier.getHistoryForProduct(item.barcode);
       final storeHistory = history
           .where((h) => h.storeId == storeId)
@@ -117,16 +162,11 @@ class CartNotifier extends Notifier<List<CartItem>> {
       }
 
       newList.add(
-        CartItem(
-          id: item.id,
-          barcode: item.barcode,
-          name: item.name,
+        item.copyWith(
           price: newPrice,
-          unitPrice: item.unitPrice,
           promoType: promo,
           imageUrl: product?.imageUrl,
           status: status,
-          quantity: item.quantity,
         ),
       );
     }

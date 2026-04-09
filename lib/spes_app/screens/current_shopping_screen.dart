@@ -16,6 +16,7 @@ import 'dart:io';
 import 'dart:async';
 import '../constants/app_strings.dart';
 import '../providers/settings_provider.dart';
+import '../services/promotion_engine.dart';
 
 class CurrentShoppingScreen extends ConsumerStatefulWidget {
   const CurrentShoppingScreen({super.key});
@@ -320,8 +321,27 @@ class _CurrentShoppingScreenState extends ConsumerState<CurrentShoppingScreen> {
                       subtitle: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(isFresh ? '${AppStrings.freshIndicatorLabel} - €${item.price.toStringAsFixed(2)}' : '${item.price.toStringAsFixed(2)} ${AppStrings.pricePerUnit}'),
-                          if (item.unitPrice != null && item.unitPrice! > 0)
+                          if (item.isPromoFree && item.originalPrice != null)
+                             Text(
+                               '€${item.originalPrice!.toStringAsFixed(2)}', 
+                               style: const TextStyle(
+                                 decoration: TextDecoration.lineThrough,
+                                 color: Colors.grey,
+                                 fontSize: 12
+                               )
+                             ),
+                          Text(
+                            item.isPromoFree 
+                              ? 'OMAGGIO (€0.00)' 
+                              : isFresh 
+                                ? '${AppStrings.freshIndicatorLabel} - €${item.price.toStringAsFixed(2)}' 
+                                : '${item.price.toStringAsFixed(2)} ${AppStrings.pricePerUnit}',
+                            style: TextStyle(
+                              color: item.isPromoFree ? Colors.green : null,
+                              fontWeight: item.isPromoFree ? FontWeight.bold : null,
+                            ),
+                          ),
+                          if (item.unitPrice != null && item.unitPrice! > 0 && !item.isPromoFree)
                             Text(
                               '(${item.unitPrice!.toStringAsFixed(2)} €/unità)',
                               style: TextStyle(fontSize: 11, color: Colors.grey.shade600, fontStyle: FontStyle.italic),
@@ -494,18 +514,36 @@ class _CurrentShoppingScreenState extends ConsumerState<CurrentShoppingScreen> {
                     if (storeHistory == null) status = CartItemStatus.error;
                     else if (price <= 0) status = CartItemStatus.warning;
                   }
-                  ref.read(cartProvider.notifier).addItem(
-                    CartItem(
-                      id: const Uuid().v4(),
-                      barcode: finalBarcodeToAdd,
-                      name: product?.name ?? AppStrings.unknownProduct,
-                      price: price,
-                      unitPrice: product?.pricePerKg,
-                      promoType: latestHistory?.promoType,
-                      imageUrl: product?.imageUrl,
-                      status: status,
-                    )
+                  final newItem = CartItem(
+                    id: const Uuid().v4(),
+                    barcode: finalBarcodeToAdd,
+                    name: product?.name ?? AppStrings.unknownProduct,
+                    price: price,
+                    unitPrice: product?.pricePerKg,
+                    promoType: latestHistory?.promoType,
+                    imageUrl: product?.imageUrl,
+                    status: status,
                   );
+                  
+                  ref.read(cartProvider.notifier).addItem(newItem);
+
+                  // [DESIGN PATTERN: Strategy Execution]
+                  // Utilizziamo il motore delle promozioni per identificare la strategia corretta
+                  // in base al tipo di promozione associata al prodotto.
+                  final promoRule = PromotionEngine.getRule(newItem.promoType);
+                  
+                  // Verifichiamo anche la validità temporale
+                  bool isStillValid = true;
+                  if (latestHistory?.promoValidUntil != null) {
+                    final expiry = DateTime.fromMillisecondsSinceEpoch(latestHistory!.promoValidUntil!);
+                    if (expiry.isBefore(DateTime.now())) {
+                      isStillValid = false;
+                    }
+                  }
+
+                  if (promoRule != null && isStillValid) {
+                    await _handlePromoScanning(context, ref, newItem, promoRule);
+                  }
                 }
               }
             },
@@ -513,6 +551,68 @@ class _CurrentShoppingScreenState extends ConsumerState<CurrentShoppingScreen> {
         ),
       ],
     );
+  }
+
+  /// Gestisce la scansione dei prodotti aggiuntivi richiesti da una promozione (es. 1+1, 3x2).
+  /// [DESIGN PATTERN: Template Method / Iterator]
+  /// Questo metodo definisce lo scheletro dell'algoritmo di acquisizione dei prodotti
+  /// delegando alla "Strategy" (PromotionRule) il numero di pezzi e i prompt specifici.
+  Future<void> _handlePromoScanning(BuildContext context, WidgetRef ref, CartItem parent, PromotionRule rule) async {
+    // Calcoliamo quanti altri pezzi servono (es. 1 in più per 1+1, 2 in più per 3x2)
+    final itemsToScan = rule.requiredTotalItems - 1;
+    final freeStartingAt = rule.requiredTotalItems - rule.freeItemsCount + 1;
+
+    for (int i = 1; i <= itemsToScan; i++) {
+      if (!mounted) return;
+
+      final bool proceed = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: Text(rule.type),
+          content: Text(rule.getScanPrompt(i)),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Salta')),
+            ElevatedButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Scansiona')),
+          ],
+        ),
+      ) ?? false;
+
+      if (!proceed) break;
+
+      final String? scannedCode = await Navigator.push(
+        context,
+        MaterialPageRoute(builder: (context) => const BarcodeScannerScreen()),
+      );
+
+      if (scannedCode != null && mounted) {
+        final products = ref.read(productProvider);
+        final product = products.where((p) => p.barcode == scannedCode).firstOrNull;
+        
+        // Per il prodotto omaggio, cerchiamo il prezzo originale storico
+        final history = await ref.read(priceHistoryProvider).getHistoryForProduct(scannedCode);
+        final currentStoreId = ref.read(activeStoreIdProvider);
+        final storeHistory = currentStoreId != null ? history.where((h) => h.storeId == currentStoreId).firstOrNull : null;
+        final originalPrice = storeHistory?.price ?? (history.isNotEmpty ? history.first.price : 0.0);
+
+        final isFree = (i + 1) >= freeStartingAt;
+
+        ref.read(cartProvider.notifier).addItem(
+          CartItem(
+            id: const Uuid().v4(),
+            barcode: scannedCode,
+            name: product?.name ?? AppStrings.unknownProduct,
+            price: isFree ? 0.0 : originalPrice,
+            originalPrice: isFree ? originalPrice : null,
+            isPromoFree: isFree,
+            parentId: parent.id, // Collegamento per cancellazione a cascata
+            imageUrl: product?.imageUrl,
+            status: isFree ? CartItemStatus.ok : (storeHistory == null ? CartItemStatus.error : CartItemStatus.ok),
+          )
+        );
+      } else {
+        break; // Utente ha annullato la scansione
+      }
+    }
   }
 
   Widget _buildItemLeading(dynamic item) {
