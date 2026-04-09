@@ -544,29 +544,8 @@ class _CurrentShoppingScreenState extends ConsumerState<CurrentShoppingScreen> {
                   
                   ref.read(cartProvider.notifier).addItem(newItem);
 
-                  // [DESIGN PATTERN: Strategy Execution]
-                  // Utilizziamo il motore delle promozioni per identificare la strategia corretta
-                  // in base al tipo di promozione associata al prodotto.
-                  final promoRule = PromotionEngine.getRule(newItem.promoType);
-                  
-                  // Verifichiamo anche la validità temporale
-                  bool isStillValid = true;
-                  if (latestHistory?.promoValidUntil != null) {
-                    final expiry = DateTime.fromMillisecondsSinceEpoch(latestHistory!.promoValidUntil!);
-                    if (expiry.isBefore(DateTime.now())) {
-                      isStillValid = false;
-                    }
-                  }
-
-                  if (promoRule != null && isStillValid) {
-                    // Verifichiamo la quantità effettiva nel carrello (potrebbe essere accorpata)
-                    final cart = ref.read(cartProvider);
-                    final itemInCart = cart.firstWhere((i) => i.barcode == finalBarcodeToAdd && !i.isPromoFree);
-                    
-                    if (promoRule.shouldTriggerScan(itemInCart.quantity)) {
-                      await _handlePromoScanning(context, ref, itemInCart, promoRule);
-                    }
-                  }
+                  // [MODIFICA] Rimosso l'attivazione automatica al primo scan per evitare di interrompere l'utente.
+                  // Il dialogo apparirà ora solo premendo il tasto '+' nel carrello.
                 }
               }
             },
@@ -588,11 +567,16 @@ class _CurrentShoppingScreenState extends ConsumerState<CurrentShoppingScreen> {
         context: context,
         builder: (ctx) => AlertDialog(
           title: Text(rule.type),
-          // Usiamo un messaggio specifico: "Soglia raggiunta! Scansiona l'omaggio"
-          content: Text("Ottimo! Hai raggiunto la soglia per l'offerta. Scansiona ora il prodotto in omaggio."),
+          content: Text("Ottimo! Hai raggiunto la soglia per l'offerta. Vuoi aggiungere lo stesso prodotto come omaggio o scansionarne uno diverso?"),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Salta')),
-            ElevatedButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Scansiona')),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false), 
+              child: const Text('Stesso Prodotto'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(ctx, true), 
+              child: const Text('Scansiona Altro'),
+            ),
           ],
         ),
       ) ?? false;
