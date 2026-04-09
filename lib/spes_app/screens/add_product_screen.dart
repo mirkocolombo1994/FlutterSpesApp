@@ -146,10 +146,17 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
 
     final history = await ref.read(priceHistoryProvider).getHistoryForProduct(searchBarcode);
     if (widget.preselectedStoreId != null) {
+      // Già impostato in initState
     } else if (history.isNotEmpty && mounted) {
-      setState(() {
-        _selectedStoreId = history.first.storeId;
-      });
+      final stores = ref.read(storeProvider);
+      // Cerchiamo il primo record nello storico che faccia riferimento a un supermercato ancora esistente
+      final validHistory = history.where((h) => stores.any((s) => s.id == h.storeId)).firstOrNull;
+      
+      if (validHistory != null) {
+        setState(() {
+          _selectedStoreId = validHistory.storeId;
+        });
+      }
     }
 
     if (existingProduct != null) {
@@ -295,12 +302,22 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
     if (_formKey.currentState!.validate()) {
       _formKey.currentState!.save();
 
-      // Se veniamo dalla cassa, il punto vendita e il prezzo SONO obbligatori se vogliamo aggiungere l'item al carrello
-      bool isShoppingMode = widget.preselectedStoreId != null;
-      if (isShoppingMode) {
-        if (_selectedStoreId == null || _priceController.text.isEmpty) {
+      final stores = ref.read(storeProvider);
+
+      // [FIX] Il punto vendita e il prezzo sono obbligatori se siamo in modalità spesa (FastMode) o se abbiamo iniziato a inserire un prezzo
+      bool isPriceEntered = _priceController.text.isNotEmpty;
+      bool mustHaveStore = widget.isFastMode || widget.preselectedStoreId != null || isPriceEntered;
+      
+      if (mustHaveStore) {
+        if (_selectedStoreId == null || !stores.any((s) => s.id == _selectedStoreId)) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text(AppStrings.selectStoreAndPriceWarning)),
+            const SnackBar(content: Text(AppStrings.validationStoreRequired)),
+          );
+          return;
+        }
+        if (_priceController.text.isEmpty) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text(AppStrings.priceRequiredValidator)),
           );
           return;
         }
@@ -330,8 +347,11 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
 
       await ref.read(productProvider.notifier).addProduct(newProduct);
 
-      // Salviamo lo storico solo se abbiamo impostato prezzo e store
-      if (_selectedStoreId != null && priceValue != null) {
+      // [FIX] Validazione dello store_id per evitare crash FOREIGN KEY se il supermercato è stato eliminato
+      final bool isStoreValid = stores.any((s) => s.id == _selectedStoreId);
+
+      // Salviamo lo storico solo se abbiamo impostato prezzo e store (e lo store è ancora valido)
+      if (_selectedStoreId != null && priceValue != null && isStoreValid) {
         int? expirationTimestamp = _promoValidUntil?.millisecondsSinceEpoch;
         String? cleanPromoType = _promoType == AppStrings.promoNone ? null : _promoType;
         if (cleanPromoType == AppStrings.promoDiscountPercent && _discountPercentController.text.isNotEmpty) {
@@ -560,6 +580,7 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
                           value: stores.any((s) => s.id == _selectedStoreId) ? _selectedStoreId : null,
                           items: stores.map((s) => DropdownMenuItem(value: s.id, child: Text(s.name))).toList(),
                           onChanged: (val) => setState(() => _selectedStoreId = val),
+                          validator: (value) => value == null ? AppStrings.validationStoreRequired : null,
                         ),
                         const SizedBox(height: 16),
                       ],
@@ -633,6 +654,7 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
                                   value: stores.any((s) => s.id == _selectedStoreId) ? _selectedStoreId : null,
                                   items: stores.map((s) => DropdownMenuItem(value: s.id, child: Text(s.name))).toList(),
                                   onChanged: (val) => setState(() => _selectedStoreId = val),
+                                  validator: (value) => (_priceController.text.isNotEmpty && value == null) ? AppStrings.validationStoreRequired : null,
                                 ),
                               ),
                               IconButton(
