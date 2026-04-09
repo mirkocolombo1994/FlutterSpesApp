@@ -366,14 +366,14 @@ class _CurrentShoppingScreenState extends ConsumerState<CurrentShoppingScreen> {
                               icon: Icon(Icons.add_circle_outline, color: canModify ? Colors.indigo : Colors.grey),
                               onPressed: canModify
                                   ? () async {
-                                      final newQty = item.quantity + 1;
-                                      // Aggiorniamo la quantità
-                                      ref.read(cartProvider.notifier).updateQuantity(item.id, newQty);
-                                      
-                                      // Verifichiamo se "scatta" la soglia per un nuovo omaggio
                                       final rule = PromotionEngine.getRule(item.promoType);
-                                      if (rule != null && rule.shouldTriggerScan(newQty) && mounted) {
-                                        await _handlePromoScanning(context, ref, item.copyWith(quantity: newQty), rule);
+                                      if (rule != null && rule.shouldTriggerScan(item.quantity) && mounted) {
+                                        // Siamo alla soglia dove scatta l'omaggio (es. 1 pezzo per 1+1, 2 pezzi per 3x2)
+                                        // Invece di aumentare il pagante, attiviamo subito la procedura omaggio
+                                        await _handlePromoScanning(context, ref, item, rule);
+                                      } else {
+                                        // Altrimenti aumentiamo semplicemente la quantità del prodotto pagante
+                                        ref.read(cartProvider.notifier).updateQuantity(item.id, item.quantity + 1);
                                       }
                                     }
                                   : null,
@@ -597,7 +597,11 @@ class _CurrentShoppingScreenState extends ConsumerState<CurrentShoppingScreen> {
         ),
       ) ?? false;
 
-      if (!proceed) break;
+      if (!proceed) {
+        // [LOGICA AGGIORNATA] Se l'utente salta il dialogo, aggiungiamo l'omaggio automaticamente con i dati del genitore
+        _addFreeItemFromParent(ref, parent);
+        continue;
+      }
 
       final String? scannedCode = await Navigator.push(
         context,
@@ -608,13 +612,10 @@ class _CurrentShoppingScreenState extends ConsumerState<CurrentShoppingScreen> {
         final products = ref.read(productProvider);
         final product = products.where((p) => p.barcode == scannedCode).firstOrNull;
         
-        // Per il prodotto omaggio, cerchiamo il prezzo originale storico
         final history = await ref.read(priceHistoryProvider).getHistoryForProduct(scannedCode);
         final currentStoreId = ref.read(activeStoreIdProvider);
         final storeHistory = currentStoreId != null ? history.where((h) => h.storeId == currentStoreId).firstOrNull : null;
         final originalPrice = storeHistory?.price ?? (history.isNotEmpty ? history.first.price : 0.0);
-
-        const isFree = true; // In questo metodo scansioniamo solo gli omaggi
 
         ref.read(cartProvider.notifier).addItem(
           CartItem(
@@ -623,16 +624,34 @@ class _CurrentShoppingScreenState extends ConsumerState<CurrentShoppingScreen> {
             name: product?.name ?? AppStrings.unknownProduct,
             price: 0.0,
             originalPrice: originalPrice,
-            isPromoFree: isFree,
-            parentId: parent.id, // Collegamento per cancellazione a cascata
+            isPromoFree: true,
+            parentId: parent.id,
             imageUrl: product?.imageUrl,
             status: CartItemStatus.ok,
           )
         );
       } else {
-        break; // Utente ha annullato la scansione
+        // [LOGICA AGGIORNATA] Se annulla lo scanner, aggiungiamo comunque l'omaggio automatico
+        _addFreeItemFromParent(ref, parent);
       }
     }
+  }
+
+  /// Helper per aggiungere un prodotto in omaggio usando i dati del prodotto genitore (fallback)
+  void _addFreeItemFromParent(WidgetRef ref, CartItem parent) {
+    ref.read(cartProvider.notifier).addItem(
+      CartItem(
+        id: const Uuid().v4(),
+        barcode: parent.barcode,
+        name: parent.name,
+        price: 0.0,
+        originalPrice: parent.price,
+        isPromoFree: true,
+        parentId: parent.id,
+        imageUrl: parent.imageUrl,
+        status: CartItemStatus.ok,
+      )
+    );
   }
 
   Widget _buildItemLeading(dynamic item) {
