@@ -12,6 +12,10 @@ abstract class PromotionRule {
   /// Numero di articoli che sono considerati "omaggio" nell'offerta.
   int get freeItemsCount;
 
+  /// Indica se l'utente può modificare manualmente la quantità nel carrello.
+  /// Per promozioni fisse come 1+1 o 3x2, questo dovrebbe essere false.
+  bool get canModifyQuantity;
+
   /// Restituisce il messaggio da mostrare all'utente durante la scansione.
   String getScanPrompt(int currentScanned);
 }
@@ -27,6 +31,9 @@ class OnePlusOneRule implements PromotionRule {
 
   @override
   int get freeItemsCount => 1;
+
+  @override
+  bool get canModifyQuantity => false;
 
   @override
   String getScanPrompt(int currentScanned) {
@@ -45,6 +52,9 @@ class ThreeForTwoRule implements PromotionRule {
 
   @override
   int get freeItemsCount => 1;
+
+  @override
+  bool get canModifyQuantity => false;
 
   @override
   String getScanPrompt(int currentScanned) {

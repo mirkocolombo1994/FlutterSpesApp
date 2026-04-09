@@ -353,14 +353,16 @@ class _CurrentShoppingScreenState extends ConsumerState<CurrentShoppingScreen> {
                         children: [
                           IconButton(
                             icon: const Icon(Icons.remove_circle_outline, color: Colors.indigo),
-                            onPressed: item.quantity > 1 
+                            onPressed: (item.quantity > 1 && (PromotionEngine.getRule(item.promoType)?.canModifyQuantity ?? true) && !item.isPromoFree && item.parentId == null)
                                 ? () => ref.read(cartProvider.notifier).updateQuantity(item.id, item.quantity - 1)
                                 : null,
                           ),
                           Text('${item.quantity}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                           IconButton(
                             icon: const Icon(Icons.add_circle_outline, color: Colors.indigo),
-                            onPressed: () => ref.read(cartProvider.notifier).updateQuantity(item.id, item.quantity + 1),
+                            onPressed: ((PromotionEngine.getRule(item.promoType)?.canModifyQuantity ?? true) && !item.isPromoFree && item.parentId == null)
+                                ? () => ref.read(cartProvider.notifier).updateQuantity(item.id, item.quantity + 1)
+                                : null,
                           ),
                           IconButton(
                             icon: const Icon(Icons.delete, color: Colors.red),

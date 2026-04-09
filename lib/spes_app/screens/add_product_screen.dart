@@ -335,6 +335,33 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
           cleanPromoType = 'Sconto ${_discountPercentController.text}%';
         }
 
+        // [FIX: Prevenzione Duplicati Promozioni]
+        // Verifichiamo se esiste già una promozione diversa per questo prodotto nello stesso negozio
+        final existingHistory = await ref.read(priceHistoryProvider).getHistoryForProduct(finalBarcode);
+        final storeHistory = existingHistory.where((h) => h.storeId == _selectedStoreId).firstOrNull;
+        
+        if (storeHistory != null && storeHistory.promoType != null && storeHistory.promoType != cleanPromoType) {
+          if (mounted) {
+            final bool? confirmed = await showDialog<bool>(
+              context: context,
+              builder: (ctx) => AlertDialog(
+                title: const Text('Attenzione: Promozione esistente'),
+                content: Text('In questo punto vendita esiste già una promozione di tipo "${storeHistory.promoType}". Vuoi sostituirla con "$cleanPromoType"?'),
+                actions: [
+                  TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Annulla')),
+                  ElevatedButton(
+                    onPressed: () => Navigator.pop(ctx, true), 
+                    style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
+                    child: const Text('Sostituisci'),
+                  ),
+                ],
+              ),
+            );
+
+            if (confirmed != true) return; // L'utente ha annullato il salvataggio
+          }
+        }
+
         final prHistory = PriceHistory(
           id: const Uuid().v4(),
           productBarcode: finalBarcode,
