@@ -309,7 +309,33 @@ class SpesAppDatabaseHelper {
 
   Future<void> deletePromotion(String id) async {
     final db = await instance.database;
-    await db.delete('promotions', where: 'id = ?', whereArgs: [id]);
+    
+    // Recuperiamo i dettagli della promo prima di cancellarla per pulire lo storico
+    final List<Map<String, dynamic>> promoMaps = await db.query(
+      'promotions',
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+
+    if (promoMaps.isNotEmpty) {
+      final String promoName = promoMaps.first['name'];
+      final String storeId = promoMaps.first['store_id'];
+
+      // 1. Cancelliamo la promo (la tabella promotion_products si pulisce via CASCADE)
+      await db.delete('promotions', where: 'id = ?', whereArgs: [id]);
+
+      // 2. Puliamo lo storico prezzi: se un prezzo aveva questa promo, la rimuoviamo
+      // così l'app non la "risuggerisce" più come attiva.
+      await db.update(
+        'price_history',
+        {
+          'promo_type': null,
+          'promo_valid_until': null,
+        },
+        where: 'store_id = ? AND promo_type = ?',
+        whereArgs: [storeId, promoName],
+      );
+    }
   }
 
   // --- PROMOTION PRODUCTS METHODS ---
