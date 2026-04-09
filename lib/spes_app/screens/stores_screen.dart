@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/store_provider.dart';
+import '../providers/price_history_provider.dart';
+import '../providers/product_provider.dart';
+import '../services/spes_app_database_helper.dart';
 import 'add_store_screen.dart';
 import '../constants/app_strings.dart';
 
@@ -22,7 +25,7 @@ class StoresScreen extends ConsumerWidget {
     }
     
     // Funzione interna per la pulizia dei dati (nascosta)
-    Future<void> _confirmAndDeleteStoreData(BuildContext context, WidgetRef ref, dynamic store) async {
+    Future<void> confirmAndDeleteStoreData(BuildContext context, WidgetRef ref, dynamic store) async {
       final bool? confirmed = await showDialog<bool>(
         context: context,
         builder: (ctx) => AlertDialog(
@@ -76,7 +79,7 @@ class StoresScreen extends ConsumerWidget {
                   elevation: isNew ? 8 : 1,
                   child: ListTile(
                     leading: GestureDetector(
-                      onLongPress: () => _confirmAndDeleteStoreData(context, ref, store),
+                      onLongPress: () => confirmAndDeleteStoreData(context, ref, store),
                       child: isNew 
                         ? const Icon(Icons.new_releases, color: Colors.green, size: 40)
                         : Icon(Icons.storefront, color: store.isClosed ? Colors.grey : Colors.indigo, size: 40),
