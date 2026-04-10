@@ -1,14 +1,17 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
+import '../providers/settings_provider.dart';
 
-class BarcodeScannerScreen extends StatefulWidget {
+class BarcodeScannerScreen extends ConsumerStatefulWidget {
   const BarcodeScannerScreen({super.key});
 
   @override
-  State<BarcodeScannerScreen> createState() => _BarcodeScannerScreenState();
+  ConsumerState<BarcodeScannerScreen> createState() => _BarcodeScannerScreenState();
 }
 
-class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
+class _BarcodeScannerScreenState extends ConsumerState<BarcodeScannerScreen> {
   final MobileScannerController _controller = MobileScannerController(
     detectionSpeed: DetectionSpeed.noDuplicates,
   );
@@ -59,6 +62,10 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
             
             if (_isValidRetailBarcode(barcodeValue)) {
                _controller.stop();
+               final settings = ref.read(settingsProvider);
+               if (settings.playScanBeep) {
+                 HapticFeedback.vibrate();
+               }
                if(mounted) Navigator.pop(context, barcodeValue);
             }
           }

@@ -238,6 +238,7 @@ class _CurrentShoppingScreenState extends ConsumerState<CurrentShoppingScreen> {
     final activeStoreId = ref.watch(activeStoreIdProvider);
     final stores = ref.watch(storeProvider);
     final currentStore = stores.where((s) => s.id == activeStoreId).firstOrNull;
+    final settings = ref.watch(settingsProvider);
 
     return Column(
       children: [
@@ -290,13 +291,13 @@ class _CurrentShoppingScreenState extends ConsumerState<CurrentShoppingScreen> {
                       title: Row(
                         children: [
                           Expanded(child: Text(item.name, style: const TextStyle(fontWeight: FontWeight.bold))),
-                          if (item.status == CartItemStatus.warning)
+                          if (item.status == CartItemStatus.warning && settings.showCartWarnings)
                              Tooltip(
                                message: AppStrings.priceMissingInStore,
                                triggerMode: TooltipTriggerMode.tap,
                                child: const Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 20),
                              ),
-                          if (item.status == CartItemStatus.error)
+                          if (item.status == CartItemStatus.error && settings.showCartWarnings)
                              Tooltip(
                                message: AppStrings.productNotIndexedInStore,
                                triggerMode: TooltipTriggerMode.tap,
@@ -441,10 +442,10 @@ class _CurrentShoppingScreenState extends ConsumerState<CurrentShoppingScreen> {
                 final products = ref.read(productProvider);
                 final existingProduct = products.where((p) => p.barcode == scannedCode).firstOrNull;
                 String? finalBarcodeToAdd;
+                bool handled = false;
                 
                 if (existingProduct != null) {
                   final currentStoreId = ref.read(activeStoreIdProvider);
-                  bool handled = false;
                   
                   if (currentStoreId != null) {
                     final history = await ref.read(priceHistoryProvider).getHistoryForProduct(scannedCode);
@@ -544,6 +545,13 @@ class _CurrentShoppingScreenState extends ConsumerState<CurrentShoppingScreen> {
                     if (storeHistory == null) status = CartItemStatus.error;
                     else if (price <= 0) status = CartItemStatus.warning;
                   }
+                  int qtyToAdd = 1;
+                  if (handled && settings.requireCartConfirmation && mounted) {
+                     final qty = await _askQuantity(context);
+                     if (qty == null) return;
+                     qtyToAdd = qty;
+                  }
+
                   final newItem = CartItem(
                     id: const Uuid().v4(),
                     barcode: finalBarcodeToAdd,
@@ -553,6 +561,7 @@ class _CurrentShoppingScreenState extends ConsumerState<CurrentShoppingScreen> {
                     promoType: latestHistory?.promoType,
                     imageUrl: product?.imageUrl,
                     status: status,
+                    quantity: qtyToAdd,
                   );
                   
                   ref.read(cartProvider.notifier).addItem(newItem);
@@ -795,6 +804,40 @@ class _CurrentShoppingScreenState extends ConsumerState<CurrentShoppingScreen> {
           },
         );
       },
+    );
+  }
+
+  Future<int?> _askQuantity(BuildContext context) async {
+    int qty = 1;
+    return showDialog<int>(
+      context: context,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return AlertDialog(
+              title: const Text('Quantità da associare', style: TextStyle(fontSize: 18, color: Colors.indigo)),
+              content: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.remove_circle_outline, size: 36, color: Colors.red),
+                    onPressed: qty > 1 ? () => setState(() => qty--) : null,
+                  ),
+                  Text('$qty', style: const TextStyle(fontSize: 32, fontWeight: FontWeight.bold)),
+                  IconButton(
+                    icon: const Icon(Icons.add_circle_outline, size: 36, color: Colors.green),
+                    onPressed: () => setState(() => qty++),
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(onPressed: () => Navigator.pop(ctx, null), child: const Text('Annulla')),
+                ElevatedButton(onPressed: () => Navigator.pop(ctx, qty), child: const Text('Aggiungi')),
+              ],
+            );
+          }
+        );
+      }
     );
   }
 }
