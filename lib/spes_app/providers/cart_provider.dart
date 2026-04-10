@@ -120,21 +120,10 @@ class CartNotifier extends Notifier<List<CartItem>> {
 
   /// [DESIGN PATTERN: State Transition / Reactive Update]
   /// Rimuove un articolo dal carrello.
-  /// Se viene rimosso un articolo "padre", gli articoli omaggio collegati perdono il beneficio
-  /// della promozione e tornano al loro prezzo originale.
+  /// Se viene rimosso un articolo "padre", gli articoli omaggio collegati (figli)
+  /// vengono eliminati a cascata per mantenere il carrello pulito.
   void removeItem(String id) {
-    state = state.where((item) => item.id != id).map((item) {
-      if (item.parentId == id) {
-        // Se l'elemento era collegato a quello rimosso, torna a prezzo pieno
-        return item.copyWith(
-          isPromoFree: false,
-          parentId: null,
-          price: item.originalPrice ?? item.price,
-          originalPrice: null,
-        );
-      }
-      return item;
-    }).toList();
+    state = state.where((item) => item.id != id && item.parentId != id).toList();
   }
 
   /// [DESIGN PATTERN: Reactive Sync / State Transition]
@@ -167,37 +156,24 @@ class CartNotifier extends Notifier<List<CartItem>> {
           final int excessAmount = currentFreeCount - allowedFreeCount;
           
           if (allowedFreeCount <= 0) {
-            // Nessun omaggio consentito, li trasformiamo tutti in paganti svincolati
-            newState = newState.map((item) {
-               if (item.parentId == id && item.isPromoFree) {
-                 return item.copyWith(
-                   isPromoFree: false,
-                   parentId: null,
-                   price: item.originalPrice ?? item.price,
-                   originalPrice: null,
-                 );
-               }
-               return item;
-            }).toList();
+            // Nessun omaggio consentito, eliminiamoli semplicemente tenendo il carrello pulito
+            newState = newState.where((item) => !(item.parentId == id && item.isPromoFree)).toList();
           } else {
-             // Riduciamo la quantità dell'omaggio a quella massima consentita
+             // Riduciamo in modo scalare le quantità degli omaggi posseduti partendo dall'ultimo aggiunto
+             int toRemove = excessAmount;
              newState = newState.map((item) {
-               if (item.parentId == id && item.isPromoFree) {
-                 return item.copyWith(quantity: allowedFreeCount);
+               if (item.parentId == id && item.isPromoFree && toRemove > 0) {
+                 if (item.quantity <= toRemove) {
+                    toRemove -= item.quantity;
+                    return item.copyWith(quantity: 0); // Lo filtreremo via nel passaggio successivo
+                 } else {
+                    final newQ = item.quantity - toRemove;
+                    toRemove = 0;
+                    return item.copyWith(quantity: newQ);
+                 }
                }
                return item;
-             }).toList();
-             
-             // Aggiungiamo il residuo come nuovo prodotto pagante
-             final freeItemRef = connectedFreeItems.first;
-             newState.add(freeItemRef.copyWith(
-               id: const Uuid().v4(),
-               quantity: excessAmount,
-               isPromoFree: false,
-               parentId: null,
-               price: freeItemRef.originalPrice ?? freeItemRef.price,
-               originalPrice: null,
-             ));
+             }).where((item) => item.quantity > 0).toList();
           }
         }
       }

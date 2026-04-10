@@ -368,11 +368,24 @@ class _CurrentShoppingScreenState extends ConsumerState<CurrentShoppingScreen> {
                                   ? () async {
                                       final rule = PromotionEngine.getRule(item.promoType);
                                       if (rule != null && rule.shouldTriggerScan(item.quantity) && mounted) {
-                                        // Siamo alla soglia dove scatta l'omaggio (es. 1 pezzo per 1+1, 2 pezzi per 3x2)
-                                        // Invece di aumentare il pagante, attiviamo subito la procedura omaggio
-                                        await _handlePromoScanning(context, ref, item, rule);
+                                        // [FIX] Verifichiamo quanti omaggi abbiamo già riscattato per questo genitore
+                                        final cart = ref.read(cartProvider);
+                                        // Sommiamo correttamente le quantità fisiche degli omaggi
+                                        final currentFreeCount = cart
+                                            .where((i) => i.parentId == item.id)
+                                            .fold<int>(0, (sum, i) => sum + i.quantity);
+                                        // Calcoliamo quanti omaggi dovremmo avere in base ai pezzi paganti attuali
+                                        final expectedFreeCount = (item.quantity ~/ rule.paidPiecesPerSet) * rule.freeItemsCount;
+
+                                        if (currentFreeCount < expectedFreeCount) {
+                                          // Siamo sotto la soglia degli omaggi previsti -> Triggeriamo il dialogo
+                                          await _handlePromoScanning(context, ref, item, rule);
+                                        } else {
+                                          // Abbiamo già tutti gli omaggi per i prodotti attuali -> Aumentiamo i paganti
+                                          ref.read(cartProvider.notifier).updateQuantity(item.id, item.quantity + 1);
+                                        }
                                       } else {
-                                        // Altrimenti aumentiamo semplicemente la quantità del prodotto pagante
+                                        // Nessun trigger promozionale (es. 2.5/2 non è intero o promo nulla) -> Aumentiamo i paganti
                                         ref.read(cartProvider.notifier).updateQuantity(item.id, item.quantity + 1);
                                       }
                                     }
