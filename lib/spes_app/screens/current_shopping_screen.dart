@@ -595,41 +595,124 @@ class _CurrentShoppingScreenState extends ConsumerState<CurrentShoppingScreen> {
       ) ?? false;
 
       if (!proceed) {
-        // [LOGICA AGGIORNATA] Se l'utente salta il dialogo, aggiungiamo l'omaggio automaticamente con i dati del genitore
         _addFreeItemFromParent(ref, parent);
         continue;
       }
 
-      final String? scannedCode = await Navigator.push(
-        context,
-        MaterialPageRoute(builder: (context) => const BarcodeScannerScreen()),
-      );
-
-      if (scannedCode != null && mounted) {
-        final products = ref.read(productProvider);
-        final product = products.where((p) => p.barcode == scannedCode).firstOrNull;
-        
-        final history = await ref.read(priceHistoryProvider).getHistoryForProduct(scannedCode);
-        final currentStoreId = ref.read(activeStoreIdProvider);
-        final storeHistory = currentStoreId != null ? history.where((h) => h.storeId == currentStoreId).firstOrNull : null;
-        final originalPrice = storeHistory?.price ?? (history.isNotEmpty ? history.first.price : 0.0);
-
-        ref.read(cartProvider.notifier).addItem(
-          CartItem(
-            id: const Uuid().v4(),
-            barcode: scannedCode,
-            name: product?.name ?? AppStrings.unknownProduct,
-            price: 0.0,
-            originalPrice: originalPrice,
-            isPromoFree: true,
-            parentId: parent.id,
-            imageUrl: product?.imageUrl,
-            status: CartItemStatus.ok,
-          )
+      bool itemAdded = false;
+      while (!itemAdded) {
+        if (!mounted) return;
+        final String? scannedCode = await Navigator.push(
+          context,
+          MaterialPageRoute(builder: (context) => const BarcodeScannerScreen()),
         );
-      } else {
-        // [LOGICA AGGIORNATA] Se annulla lo scanner, aggiungiamo comunque l'omaggio automatico
-        _addFreeItemFromParent(ref, parent);
+
+        if (scannedCode != null && mounted) {
+          if (scannedCode == parent.barcode) {
+             _addFreeItemFromParent(ref, parent);
+             itemAdded = true;
+             continue;
+          }
+
+          final products = ref.read(productProvider);
+          var product = products.where((p) => p.barcode == scannedCode).firstOrNull;
+          
+          if (product == null) {
+              final result = await Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => AddProductScreen(initialBarcode: scannedCode, preselectedStoreId: ref.read(activeStoreIdProvider), isFastMode: true)),
+              );
+              
+              final updatedProducts = ref.read(productProvider);
+              product = updatedProducts.where((p) => p.barcode == (result is String ? result : scannedCode)).firstOrNull;
+              
+              if (product == null) {
+                 continue; // Utente ha annullato l'aggiunta
+              }
+          }
+
+          final parentProduct = ref.read(productProvider).where((p) => p.barcode == parent.barcode).firstOrNull;
+          final history = await ref.read(priceHistoryProvider).getHistoryForProduct(scannedCode);
+          final currentStoreId = ref.read(activeStoreIdProvider);
+          final storeHistory = currentStoreId != null ? history.where((h) => h.storeId == currentStoreId).firstOrNull : null;
+          
+          bool isCompatible = false;
+          String errorMessage = '';
+
+          final parentNameWords = parentProduct?.name.toLowerCase().split(RegExp(r'\s+')).where((w) => w.length >= 3).toList() ?? [];
+          final productNameWords = product.name.toLowerCase().split(RegExp(r'\s+')).where((w) => w.length >= 3).toList();
+          
+          bool nameMatch = false;
+          if (parentNameWords.isNotEmpty && productNameWords.isNotEmpty) {
+             if (parentNameWords.first == productNameWords.first) {
+                 nameMatch = true;
+             }
+          }
+
+          final pBrand = product.brand?.toLowerCase().trim() ?? '';
+          final pCat = product.category?.toLowerCase().trim() ?? '';
+          final parentBrand = parentProduct?.brand?.toLowerCase().trim() ?? '';
+          final parentCat = parentProduct?.category?.toLowerCase().trim() ?? '';
+          
+          bool categoryMatch = pCat.isNotEmpty && parentCat.isNotEmpty && pCat == parentCat;
+          bool brandMatch = pBrand.isNotEmpty && parentBrand.isNotEmpty && pBrand == parentBrand;
+          bool priceMatch = storeHistory != null && storeHistory.price == parent.price;
+          bool promoTypeMatch = storeHistory == null || storeHistory.promoType == parent.promoType;
+
+          if (!promoTypeMatch) {
+             errorMessage = 'Il prodotto scansionato non rientra nell\'offerta ${parent.promoType}.';
+          } else if (!categoryMatch) {
+             errorMessage = 'La categoria ($pCat) non combacia. I prodotti in promozione devono appartenere alla stessa categoria ($parentCat).';
+          } else if (!priceMatch && storeHistory != null) {
+             errorMessage = 'Il prezzo base (${storeHistory.price.toStringAsFixed(2)}€) non coincide col prodotto pagante (${parent.price.toStringAsFixed(2)}€).';
+          } else if (!nameMatch && !brandMatch) {
+             errorMessage = 'Devono avere la stessa Marca o lo stesso Nome radice per essere combinati nella promo.';
+          } else {
+             isCompatible = true;
+          }
+
+          if (isCompatible) {
+             final originalPrice = storeHistory?.price ?? (history.isNotEmpty ? history.first.price : 0.0);
+             ref.read(cartProvider.notifier).addItem(
+               CartItem(
+                 id: const Uuid().v4(),
+                 barcode: product.barcode,
+                 name: product.name,
+                 price: 0.0,
+                 originalPrice: originalPrice,
+                 isPromoFree: true,
+                 parentId: parent.id,
+                 imageUrl: product.imageUrl,
+                 status: CartItemStatus.ok,
+               )
+             );
+             itemAdded = true;
+             if (mounted) {
+               ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                 content: Text('Prodotto omaggio aggiunto con successo!'),
+                 backgroundColor: Colors.green,
+               ));
+             }
+          } else {
+             final bool retry = await showDialog<bool>(
+               context: context,
+               builder: (ctx) => AlertDialog(
+                 title: const Text('Prodotto non compatibile', style: TextStyle(color: Colors.red)),
+                 content: Text(errorMessage),
+                 actions: [
+                   TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Annulla')),
+                   ElevatedButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Riprova Scansione')),
+                 ]
+               )
+             ) ?? false;
+             
+             if (!retry) {
+               break; // Esce dal while loop ma non aggiunge il prodotto clonato
+             }
+          }
+        } else {
+          break; // Scanner annullato
+        }
       }
     }
   }
