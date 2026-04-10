@@ -393,6 +393,8 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
           timestamp: DateTime.now().millisecondsSinceEpoch,
           promoType: cleanPromoType,
           promoValidUntil: expirationTimestamp,
+          unitPrice: double.tryParse(_pricePerKgController.text),
+          weightRecorded: double.tryParse(_weightController.text.replaceAll(',', '.')),
         );
         await ref.read(priceHistoryProvider).addPriceHistory(prHistory);
 
@@ -584,11 +586,60 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
                         ),
                         const SizedBox(height: 16),
                       ],
-                      TextFormField(
-                        controller: _priceController,
-                        focusNode: _priceFocusNode,
-                        decoration: const InputDecoration(labelText: AppStrings.recordedPriceRequired, border: OutlineInputBorder()),
-                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      Row(
+                        children: [
+                          Expanded(
+                            flex: 5,
+                            child: TextFormField(
+                              controller: _priceController,
+                              focusNode: _priceFocusNode,
+                              decoration: const InputDecoration(labelText: AppStrings.recordedPriceRequired, border: OutlineInputBorder()),
+                              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            flex: 4,
+                            child: TextFormField(
+                              controller: _weightController,
+                              decoration: const InputDecoration(labelText: 'Qtà/Peso', hintText: 'es. 0.350', border: OutlineInputBorder()),
+                              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            flex: 2,
+                            child: DropdownButtonHideUnderline(
+                              child: DropdownButton<String>(
+                                isExpanded: true,
+                                value: _weightUnit,
+                                items: [AppStrings.unitKg, AppStrings.unitG, AppStrings.unitL, AppStrings.unitMl, AppStrings.unitPz]
+                                    .map((u) => DropdownMenuItem(value: u, child: Text(u, style: const TextStyle(fontSize: 14)))).toList(),
+                                onChanged: (val) {
+                                  setState(() => _weightUnit = val);
+                                  _calculatePricePerKg();
+                                },
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      ValueListenableBuilder<TextEditingValue>(
+                        valueListenable: _pricePerKgController,
+                        builder: (context, value, child) {
+                          if (value.text.isNotEmpty) {
+                            return Padding(
+                              padding: const EdgeInsets.only(top: 8.0, bottom: 4.0),
+                              child: Align(
+                                alignment: Alignment.centerLeft,
+                                child: Text('Prezzo Unitario: ${value.text} €/$_weightUnit', 
+                                  style: const TextStyle(color: Colors.indigo, fontSize: 13, fontWeight: FontWeight.bold)
+                                ),
+                              ),
+                            );
+                          }
+                          return const SizedBox.shrink();
+                        },
                       ),
                       const SizedBox(height: 8),
                       SwitchListTile(

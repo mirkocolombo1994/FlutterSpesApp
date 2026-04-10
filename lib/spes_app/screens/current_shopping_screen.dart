@@ -343,7 +343,7 @@ class _CurrentShoppingScreenState extends ConsumerState<CurrentShoppingScreen> {
                           ),
                           if (item.unitPrice != null && item.unitPrice! > 0 && !item.isPromoFree)
                             Text(
-                              '(${item.unitPrice!.toStringAsFixed(2)} €/unità)',
+                              '(${item.unitPrice!.toStringAsFixed(2)} ${isFresh ? '€/Kg' : '€/unità'})',
                               style: TextStyle(fontSize: 11, color: Colors.grey.shade600, fontStyle: FontStyle.italic),
                             ),
                         ],
@@ -549,7 +549,7 @@ class _CurrentShoppingScreenState extends ConsumerState<CurrentShoppingScreen> {
                     barcode: finalBarcodeToAdd,
                     name: product?.name ?? AppStrings.unknownProduct,
                     price: price,
-                    unitPrice: product?.pricePerKg,
+                    unitPrice: latestHistory?.unitPrice ?? product?.pricePerKg,
                     promoType: latestHistory?.promoType,
                     imageUrl: product?.imageUrl,
                     status: status,
@@ -679,6 +679,7 @@ class _CurrentShoppingScreenState extends ConsumerState<CurrentShoppingScreen> {
                  barcode: product.barcode,
                  name: product.name,
                  price: 0.0,
+                 unitPrice: storeHistory?.unitPrice ?? product.pricePerKg,
                  originalPrice: originalPrice,
                  isPromoFree: true,
                  parentId: parent.id,

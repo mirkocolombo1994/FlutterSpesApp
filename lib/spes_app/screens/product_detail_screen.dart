@@ -404,7 +404,7 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
             child: Table(
               columnWidths: const {
                 0: FlexColumnWidth(2),
-                1: FixedColumnWidth(80),
+                1: FixedColumnWidth(95),
                 2: FixedColumnWidth(100),
               },
               children: [
@@ -429,7 +429,9 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
                   return TableRow(
                     children: [
                       _buildTableCell(store?.name ?? AppStrings.unknown),
-                      _buildTableCell('${history.price.toStringAsFixed(2)} €'),
+                      _buildTableCell(history.unitPrice != null 
+                          ? '${history.unitPrice!.toStringAsFixed(2)} €/Kg' 
+                          : '${history.price.toStringAsFixed(2)} €'),
                       _buildTableCell(DateFormat('dd/MM/yyyy').format(date)),
                     ],
                   );
