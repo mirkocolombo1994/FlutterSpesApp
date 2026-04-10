@@ -201,24 +201,7 @@ class _ShoppingListDetailScreenState extends ConsumerState<ShoppingListDetailScr
               ref.read(shoppingListItemServiceProvider).toggleItemCheck(item);
             },
           ),
-          if (product.imageUrl != null && File(product.imageUrl!).existsSync())
-            Container(
-              width: 40,
-              height: 40,
-              margin: const EdgeInsets.only(right: 8),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(4),
-                image: DecorationImage(
-                  image: FileImage(File(product.imageUrl!)),
-                  fit: BoxFit.cover,
-                ),
-              ),
-            )
-          else
-            const Padding(
-              padding: EdgeInsets.only(right: 8.0),
-              child: Icon(Icons.inventory, color: Colors.grey),
-            ),
+          _buildProductImage(product),
         ],
       ),
       title: Text(product.name, style: TextStyle(
@@ -346,5 +329,36 @@ class _ShoppingListDetailScreenState extends ConsumerState<ShoppingListDetailScr
         ),
       ),
     );
+  }
+
+  Widget _buildProductImage(Product product) {
+    ImageProvider? image;
+    if (product.imageUrl != null) {
+      if (product.imageUrl!.startsWith('http')) {
+        image = NetworkImage(product.imageUrl!);
+      } else if (File(product.imageUrl!).existsSync()) {
+        image = FileImage(File(product.imageUrl!));
+      }
+    }
+
+    if (image != null) {
+      return Container(
+        width: 40,
+        height: 40,
+        margin: const EdgeInsets.only(right: 8),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(4),
+          image: DecorationImage(
+            image: image,
+            fit: BoxFit.cover,
+          ),
+        ),
+      );
+    } else {
+      return const Padding(
+        padding: EdgeInsets.only(right: 8.0),
+        child: Icon(Icons.inventory, color: Colors.grey),
+      );
+    }
   }
 }

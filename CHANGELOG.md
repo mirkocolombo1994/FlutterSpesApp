@@ -1,5 +1,16 @@
 # Registro delle Modifiche (Changelog)
 
+### [0.4.0] - 2026-04-10
+
+### ✨ Nuove Funzionalità
+* **Motore Promozionale:** Gestione rigorosa dei vincoli per le offerte 1+1 e 3x2 (controllo incrociato di prezzo base, categoria, marca e nome radice).
+* **Gestione Prodotti Freschi:** Inserita la possibilità di pesare manualmente i prodotti "freschi" (es. banco frigo/ortofrutta) e autocalcolo del Prezzo al Kg. Aggiornato lo Storico Prezzi (Schema v10) per tracciare queste metriche nel tempo.
+* **Impostazioni Utente (Settings):** Inserita una dashboard configurabile con feedback aptico per lo scanner, blocco di sicurezza (richiesta quantità) prima di inserire nel carrello, filtri per nascondere alert visivi e opzione "Risparmio Dati" (evita di scaricare immagini API non necessarie da OpenFoodFacts).
+* **Validazione Barcode Rigorosa:** Implementato Checksum (Algoritmo Modulo 10) per scartare in automatico QR Code errati, link web o codici non aderenti agli standard EAN/UPC.
+
+### 🐛 Bug Fixes
+* **Carrello e Fast Mode:** Risolti i check "Out of Scope" durante lo storno dei prodotti. La Fast Mode ora gestisce impeccabilmente il loop di fallback su nuovi record.
+* **Compatibilità UI:** Evitato accumulo visivo dei Toast e migliorata scalabilità della griglia storica.
 ### [0.2.4](https://github.com/mirkocolombo1994/FlutterSpesApp/compare/v0.2.3...v0.2.4) (2026-03-24)
 
 

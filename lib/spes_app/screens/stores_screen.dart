@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/store_provider.dart';
+import '../providers/price_history_provider.dart';
+import '../providers/product_provider.dart';
+import '../services/spes_app_database_helper.dart';
 import 'add_store_screen.dart';
 import '../constants/app_strings.dart';
 
@@ -19,6 +22,41 @@ class StoresScreen extends ConsumerWidget {
            ref.read(newlyAddedStoreIdProvider.notifier).setId(null);
         });
       });
+    }
+    
+    // Funzione interna per la pulizia dei dati (nascosta)
+    Future<void> confirmAndDeleteStoreData(BuildContext context, WidgetRef ref, dynamic store) async {
+      final bool? confirmed = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Elimina Dati Punto Vendita'),
+          content: Text('Vuoi eliminare DEFINITIVAMENTE tutti i prezzi e i prodotti esclusivi associati a "${store.name}"? Questa azione non elimina il supermercato stesso.'),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text(AppStrings.cancel)),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+              onPressed: () => Navigator.pop(ctx, true), 
+              child: const Text(AppStrings.confirmAction, style: TextStyle(color: Colors.white)),
+            ),
+          ],
+        ),
+      );
+
+      if (confirmed == true) {
+        final dbHelper = SpesAppDatabaseHelper.instance;
+        await dbHelper.deleteProductsExclusiveToStore(store.id);
+        await dbHelper.deletePriceHistoryForStore(store.id);
+        
+        // Invalida i provider per aggiornare la UI
+        ref.invalidate(priceHistoryProvider);
+        ref.invalidate(productProvider);
+        
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Dati di "${store.name}" eliminati con successo.'), backgroundColor: Colors.red),
+          );
+        }
+      }
     }
 
     return Scaffold(
@@ -40,9 +78,12 @@ class StoresScreen extends ConsumerWidget {
                   ) : null,
                   elevation: isNew ? 8 : 1,
                   child: ListTile(
-                    leading: isNew 
-                      ? const Icon(Icons.new_releases, color: Colors.green, size: 40)
-                      : Icon(Icons.storefront, color: store.isClosed ? Colors.grey : Colors.indigo, size: 40),
+                    leading: GestureDetector(
+                      onLongPress: () => confirmAndDeleteStoreData(context, ref, store),
+                      child: isNew 
+                        ? const Icon(Icons.new_releases, color: Colors.green, size: 40)
+                        : Icon(Icons.storefront, color: store.isClosed ? Colors.grey : Colors.indigo, size: 40),
+                    ),
                     title: Text(
                       isNew ? '${store.name} (${AppStrings.newStoreIndicator})' : store.name, 
                       style: TextStyle(

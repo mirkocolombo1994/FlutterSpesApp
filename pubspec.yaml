@@ -1,7 +1,7 @@
 name: task_master_app
 description: A new Flutter project.
 publish_to: none
-version: 0.3.0+6
+version: 0.4.0+7
 environment:
   sdk: ^3.10.8
 dependencies:
@@ -22,6 +22,8 @@ dependencies:
   image_picker: ^1.1.2
   path_provider: ^2.1.5
   openfoodfacts: ^3.30.2
+  shared_preferences: ^2.5.5
+  package_info_plus: ^9.0.1
 dev_dependencies:
   flutter_test:
     sdk: flutter

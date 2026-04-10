@@ -15,21 +15,25 @@ class OpenFoodFactsService {
     off.OpenFoodAPIConfiguration.globalCountry = off.OpenFoodFactsCountry.ITALY;
   }
 
-  Future<Product?> fetchProductByBarcode(String barcode) async {
+  Future<Product?> fetchProductByBarcode(String barcode, {bool dataSaver = false}) async {
     try {
+      final List<off.ProductField> targetFields = [
+        off.ProductField.NAME,
+        off.ProductField.BRANDS,
+        off.ProductField.QUANTITY,
+        off.ProductField.CATEGORIES_TAGS,
+        off.ProductField.INGREDIENTS_TEXT,
+        off.ProductField.NUTRISCORE,
+        off.ProductField.ECOSCORE_DATA,
+      ];
+      
+      if (!dataSaver) {
+        targetFields.add(off.ProductField.IMAGE_FRONT_URL);
+      }
+
       final off.ProductQueryConfiguration configuration = off.ProductQueryConfiguration(
         barcode,
-        fields: [
-          off.ProductField.NAME,
-          off.ProductField.BRANDS,
-          off.ProductField.QUANTITY,
-          off.ProductField.IMAGE_FRONT_URL,
-          off.ProductField.CATEGORIES_TAGS,
-          off.ProductField.INGREDIENTS_TEXT,
-          // Nutri-Score and Eco-Score room for future
-          off.ProductField.NUTRISCORE,
-          off.ProductField.ECOSCORE_DATA,
-        ],
+        fields: targetFields,
         version: off.ProductQueryVersion.v3,
       );
 
@@ -39,6 +43,7 @@ class OpenFoodFactsService {
         final off.Product offProductSource = result.product!;
         
         final normalization = _normalizeQuantity(offProductSource.quantity ?? '');
+        final categoryTag = offProductSource.categoriesTags?.firstOrNull;
         
         return Product(
           barcode: barcode,
@@ -48,7 +53,8 @@ class OpenFoodFactsService {
           imageUrl: offProductSource.imageFrontUrl,
           weight: normalization.value,
           weightUnit: normalization.unit,
-          category: offProductSource.categoriesTags?.firstOrNull?.replaceAll('en:', '').replaceAll('it:', ''),
+          // We store the ID here. The UI will look up/create the category.
+          category: categoryTag,
           // pricePerKg will be calculated when user enters the price
           rawOffData: result.product?.toJson().toString(),
         );
@@ -78,12 +84,22 @@ class OpenFoodFactsService {
     ];
 
     return commonCategoryTags.map((tag) {
-      final name = tag.split(':').last.replaceAll('-', ' ');
       return Category(
         id: tag,
-        name: name[0].toUpperCase() + name.substring(1),
+        name: cleanCategoryName(tag),
       );
     }).toList();
+  }
+
+  /// Utility to clean a category tag (e.g. "it:bevande-analcoliche" -> "Bevande analcoliche")
+  String cleanCategoryName(String tag) {
+    // Remove language prefixes
+    String name = tag.replaceAll(RegExp(r'^[a-z]{2}:'), '');
+    // Replace dashes with spaces
+    name = name.replaceAll('-', ' ');
+    // Capitalize first letter
+    if (name.isEmpty) return name;
+    return name[0].toUpperCase() + name.substring(1);
   }
 
   _NormalizedQuantity _normalizeQuantity(String quantity) {

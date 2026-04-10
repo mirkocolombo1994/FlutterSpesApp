@@ -3,15 +3,12 @@ import 'package:provider/provider.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:task_master_app/task_provider.dart';
 import 'package:task_master_app/home_screen.dart';
-import 'package:task_master_app/spes_app/screens/settings_screen.dart';
+import 'package:task_master_app/spes_app/providers/settings_provider.dart';
 
 void main() {
   runApp(
-    ProviderScope( // Riverpod injection
-      child: ChangeNotifierProvider( // legacy Provider
-        create: (context) => TaskProvider(),
-        child: const MyApp(),
-      ),
+    const ProviderScope( // Riverpod injection
+      child: MyApp(),
     ),
   );
 }
@@ -21,7 +18,8 @@ class MyApp extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final themeMode = ref.watch(themeProvider);
+    final settings = ref.watch(settingsProvider);
+    final themeMode = settings.themeMode;
 
     return MaterialApp(
       debugShowCheckedModeBanner: false,

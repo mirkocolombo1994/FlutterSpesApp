@@ -163,6 +163,18 @@ class AppStrings {
   static const String priceConfirmed = 'Sì, Confermato';
   static const String priceChanged = 'No, è cambiato';
 
+  // Location Change Detection
+  static const String locationChangedTitle = 'Cambio Posizione';
+  static const String locationChangedMessage = 'Sembri essere arrivato presso ';
+  static const String locationChangedQuestion = 'Vuoi cambiare il punto vendita attivo? Questo svuoterà il carrello attuale.';
+  static const String stayAtCurrentStore = 'Resta qui';
+  static const String switchToNewStore = 'Cambia Negozio';
+
+  // Location Settings
+  static const String locationSettingsSection = 'Rilevamento Posizione';
+  static const String locationIntervalLabel = 'Intervallo rilevamento posizione';
+  static const String minutesLabel = 'minuti';
+
   // ShoppingListsScreen
   static const String shoppingListsTitle = 'Le mie Liste Spesa';
   static const String createList = 'Crea nuova lista';

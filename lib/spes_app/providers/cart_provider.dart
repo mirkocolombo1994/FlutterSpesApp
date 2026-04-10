@@ -1,4 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:uuid/uuid.dart';
+import '../services/promotion_engine.dart';
 import 'price_history_provider.dart';
 import 'product_provider.dart';
 
@@ -13,6 +15,9 @@ class CartItem {
   final String? promoType; // Sconto, 1+1, etc.
   final String? imageUrl;
   final CartItemStatus status;
+  final bool isPromoFree; // Indica se il prodotto è omaggio (es. il secondo in un 1+1)
+  final String? parentId; // ID dell'articolo "pagante" a cui questo omaggio è collegato
+  final double? originalPrice; // Prezzo originale da mostrare barrato
   int quantity;
 
   CartItem({
@@ -24,8 +29,41 @@ class CartItem {
     this.promoType,
     this.imageUrl,
     this.status = CartItemStatus.ok,
+    this.isPromoFree = false,
+    this.parentId,
+    this.originalPrice,
     this.quantity = 1,
   });
+
+  CartItem copyWith({
+    String? id,
+    String? barcode,
+    String? name,
+    double? price,
+    double? unitPrice,
+    String? promoType,
+    String? imageUrl,
+    CartItemStatus? status,
+    bool? isPromoFree,
+    String? parentId,
+    double? originalPrice,
+    int? quantity,
+  }) {
+    return CartItem(
+      id: id ?? this.id,
+      barcode: barcode ?? this.barcode,
+      name: name ?? this.name,
+      price: price ?? this.price,
+      unitPrice: unitPrice ?? this.unitPrice,
+      promoType: promoType ?? this.promoType,
+      imageUrl: imageUrl ?? this.imageUrl,
+      status: status ?? this.status,
+      isPromoFree: isPromoFree ?? this.isPromoFree,
+      parentId: parentId ?? this.parentId,
+      originalPrice: originalPrice ?? this.originalPrice,
+      quantity: quantity ?? this.quantity,
+    );
+  }
 }
 
 class CartNotifier extends Notifier<List<CartItem>> {
@@ -33,25 +71,46 @@ class CartNotifier extends Notifier<List<CartItem>> {
   List<CartItem> build() => [];
 
   void addItem(CartItem item) {
-    // Se lo stesso prodotto allo stesso prezzo è già nel carrello, aumenta solo la quantità
+    // [DESIGN PATTERN: Composite / Registry Lookup]
+    // Gestione accorpamento intelligente per prodotti in promozione.
+    
+    // 1. Se è un prodotto "omaggio" (child), cerchiamo se esiste già un omaggio dello stesso tipo per lo stesso genitore
+    if (item.parentId != null) {
+      final idx = state.indexWhere((e) => e.parentId == item.parentId && e.barcode == item.barcode && e.isPromoFree);
+      if (idx >= 0) {
+        final curr = state[idx];
+        state = [
+          ...state.sublist(0, idx),
+          curr.copyWith(quantity: curr.quantity + item.quantity),
+          ...state.sublist(idx + 1),
+        ];
+        return;
+      }
+    }
+
+    // 2. Se è un prodotto "pagante" (parent) con promo attiva, lo accorpiamo se barcode e promo coincidono
+    if (item.promoType != null && !item.isPromoFree) {
+       final idx = state.indexWhere((e) => e.barcode == item.barcode && e.promoType == item.promoType && !e.isPromoFree);
+       if (idx >= 0) {
+        final curr = state[idx];
+        state = [
+          ...state.sublist(0, idx),
+          curr.copyWith(quantity: curr.quantity + item.quantity),
+          ...state.sublist(idx + 1),
+        ];
+        return;
+      }
+    }
+
+    // 3. Altrimenti, se lo stesso prodotto allo stesso prezzo è già nel carrello, aumenta solo la quantità
     final idx = state.indexWhere(
-      (e) => e.barcode == item.barcode && e.price == item.price,
+      (e) => e.barcode == item.barcode && e.price == item.price && !e.isPromoFree && e.parentId == null,
     );
     if (idx >= 0) {
       final curr = state[idx];
       state = [
         ...state.sublist(0, idx),
-        CartItem(
-          id: curr.id,
-          barcode: curr.barcode,
-          name: curr.name,
-          price: curr.price,
-          unitPrice: curr.unitPrice,
-          promoType: curr.promoType,
-          imageUrl: curr.imageUrl,
-          status: curr.status,
-          quantity: curr.quantity + 1,
-        ),
+        curr.copyWith(quantity: curr.quantity + item.quantity),
         ...state.sublist(idx + 1),
       ];
     } else {
@@ -59,28 +118,68 @@ class CartNotifier extends Notifier<List<CartItem>> {
     }
   }
 
+  /// [DESIGN PATTERN: State Transition / Reactive Update]
+  /// Rimuove un articolo dal carrello.
+  /// Se viene rimosso un articolo "padre", gli articoli omaggio collegati (figli)
+  /// vengono eliminati a cascata per mantenere il carrello pulito.
   void removeItem(String id) {
-    state = state.where((e) => e.id != id).toList();
+    state = state.where((item) => item.id != id && item.parentId != id).toList();
   }
 
+  /// [DESIGN PATTERN: Reactive Sync / State Transition]
+  /// Aggiorna la quantità di un articolo. La sincronizzazione degli omaggi in aumento è gestita dalla UI,
+  /// ma il REVERT al decremento è gestito qui per sicurezza.
   void updateQuantity(String id, int newQuantity) {
     if (newQuantity <= 0) return;
-    state = state.map((item) {
+    
+    final itemIdx = state.indexWhere((e) => e.id == id);
+    if (itemIdx == -1) return;
+    final parentItem = state[itemIdx];
+
+    List<CartItem> newState = state.map((item) {
       if (item.id == id) {
-        return CartItem(
-          id: item.id,
-          barcode: item.barcode,
-          name: item.name,
-          price: item.price,
-          unitPrice: item.unitPrice,
-          promoType: item.promoType,
-          imageUrl: item.imageUrl,
-          status: item.status,
-          quantity: newQuantity,
-        );
+        return item.copyWith(quantity: newQuantity);
       }
       return item;
     }).toList();
+
+    // Revert logic: The user decreased the paid quantity, check if we must invalidate some free items
+    if (newQuantity < parentItem.quantity && !parentItem.isPromoFree) {
+      final rule = PromotionEngine.getRule(parentItem.promoType);
+      if (rule != null) {
+        final allowedFreeCount = (newQuantity ~/ rule.paidPiecesPerSet).toInt() * rule.freeItemsCount.toInt();
+        
+        final connectedFreeItems = newState.where((i) => i.parentId == id && i.isPromoFree).toList();
+        final currentFreeCount = connectedFreeItems.fold<int>(0, (sum, i) => sum + i.quantity);
+
+        if (currentFreeCount > allowedFreeCount) {
+          final int excessAmount = currentFreeCount - allowedFreeCount;
+          
+          if (allowedFreeCount <= 0) {
+            // Nessun omaggio consentito, eliminiamoli semplicemente tenendo il carrello pulito
+            newState = newState.where((item) => !(item.parentId == id && item.isPromoFree)).toList();
+          } else {
+             // Riduciamo in modo scalare le quantità degli omaggi posseduti partendo dall'ultimo aggiunto
+             int toRemove = excessAmount;
+             newState = newState.map((item) {
+               if (item.parentId == id && item.isPromoFree && toRemove > 0) {
+                 if (item.quantity <= toRemove) {
+                    toRemove -= item.quantity;
+                    return item.copyWith(quantity: 0); // Lo filtreremo via nel passaggio successivo
+                 } else {
+                    final newQ = item.quantity - toRemove;
+                    toRemove = 0;
+                    return item.copyWith(quantity: newQ);
+                 }
+               }
+               return item;
+             }).where((item) => item.quantity > 0).toList();
+          }
+        }
+      }
+    }
+
+    state = newState;
   }
 
   void clear() {
@@ -94,6 +193,12 @@ class CartNotifier extends Notifier<List<CartItem>> {
 
     List<CartItem> newList = [];
     for (var item in state) {
+      // Gli omaggi non ricalcolano il prezzo (rimangono 0)
+      if (item.isPromoFree) {
+        newList.add(item);
+        continue;
+      }
+
       final history = await historyNotifier.getHistoryForProduct(item.barcode);
       final storeHistory = history
           .where((h) => h.storeId == storeId)
@@ -117,16 +222,11 @@ class CartNotifier extends Notifier<List<CartItem>> {
       }
 
       newList.add(
-        CartItem(
-          id: item.id,
-          barcode: item.barcode,
-          name: item.name,
+        item.copyWith(
           price: newPrice,
-          unitPrice: item.unitPrice,
           promoType: promo,
           imageUrl: product?.imageUrl,
           status: status,
-          quantity: item.quantity,
         ),
       );
     }

@@ -26,7 +26,7 @@ class SpesAppDatabaseHelper {
 
     return await openDatabase(
       path,
-      version: 8,
+      version: 10,
       onCreate: _createDB,
       onUpgrade: _upgradeDB,
       onConfigure: (db) async {
@@ -85,6 +85,25 @@ class SpesAppDatabaseHelper {
         await db.execute('ALTER TABLE products ADD COLUMN raw_off_data TEXT');
       } catch (_) {}
     }
+    if (oldVersion < 9) {
+      try {
+        await db.execute('''
+          CREATE TABLE promotion_products (
+            promo_id TEXT,
+            product_barcode TEXT,
+            PRIMARY KEY (promo_id, product_barcode),
+            FOREIGN KEY (promo_id) REFERENCES promotions (id) ON DELETE CASCADE,
+            FOREIGN KEY (product_barcode) REFERENCES products (barcode) ON DELETE CASCADE
+          )
+        ''');
+      } catch (_) {}
+    }
+    if (oldVersion < 10) {
+      try {
+        await db.execute('ALTER TABLE price_history ADD COLUMN unit_price REAL');
+        await db.execute('ALTER TABLE price_history ADD COLUMN weight_recorded REAL');
+      } catch (_) {}
+    }
   }
 
   Future _createDB(Database db, int version) async {
@@ -134,6 +153,16 @@ class SpesAppDatabaseHelper {
         raw_off_data TEXT
       )
     ''');
+    
+    await db.execute('''
+      CREATE TABLE promotion_products (
+        promo_id TEXT,
+        product_barcode TEXT,
+        PRIMARY KEY (promo_id, product_barcode),
+        FOREIGN KEY (promo_id) REFERENCES promotions (id) ON DELETE CASCADE,
+        FOREIGN KEY (product_barcode) REFERENCES products (barcode) ON DELETE CASCADE
+      )
+    ''');
 
     await db.execute('''
       CREATE TABLE price_history (
@@ -144,6 +173,8 @@ class SpesAppDatabaseHelper {
         timestamp INTEGER NOT NULL,
         promo_type TEXT,
         promo_valid_until INTEGER,
+        unit_price REAL,
+        weight_recorded REAL,
         FOREIGN KEY (product_barcode) REFERENCES products (barcode) ON DELETE CASCADE,
         FOREIGN KEY (store_id) REFERENCES stores (id) ON DELETE CASCADE
       )
@@ -286,7 +317,61 @@ class SpesAppDatabaseHelper {
 
   Future<void> deletePromotion(String id) async {
     final db = await instance.database;
-    await db.delete('promotions', where: 'id = ?', whereArgs: [id]);
+    
+    // Recuperiamo i dettagli della promo prima di cancellarla per pulire lo storico
+    final List<Map<String, dynamic>> promoMaps = await db.query(
+      'promotions',
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+
+    if (promoMaps.isNotEmpty) {
+      final String promoName = promoMaps.first['name'];
+      final String storeId = promoMaps.first['store_id'];
+
+      // 1. Cancelliamo la promo (la tabella promotion_products si pulisce via CASCADE)
+      await db.delete('promotions', where: 'id = ?', whereArgs: [id]);
+
+      // 2. Puliamo lo storico prezzi: se un prezzo aveva questa promo, la rimuoviamo
+      // così l'app non la "risuggerisce" più come attiva.
+      await db.update(
+        'price_history',
+        {
+          'promo_type': null,
+          'promo_valid_until': null,
+        },
+        where: 'store_id = ? AND promo_type = ?',
+        whereArgs: [storeId, promoName],
+      );
+    }
+  }
+
+  // --- PROMOTION PRODUCTS METHODS ---
+  Future<void> linkProductToPromotion(String promoId, String productBarcode) async {
+    final db = await instance.database;
+    await db.insert('promotion_products', {
+      'promo_id': promoId,
+      'product_barcode': productBarcode,
+    }, conflictAlgorithm: ConflictAlgorithm.ignore);
+  }
+
+  Future<void> unlinkProductFromPromotion(String promoId, String productBarcode) async {
+    final db = await instance.database;
+    await db.delete('promotion_products', 
+      where: 'promo_id = ? AND product_barcode = ?', 
+      whereArgs: [promoId, productBarcode]);
+  }
+
+  Future<List<Product>> getProductsForPromotion(String promoId) async {
+    final db = await instance.database;
+    // Join promotion_products with products
+    final List<Map<String, dynamic>> maps = await db.rawQuery('''
+      SELECT p.* 
+      FROM products p
+      INNER JOIN promotion_products pp ON p.barcode = pp.product_barcode
+      WHERE pp.promo_id = ?
+    ''', [promoId]);
+    return List.generate(maps.length, (i) => Product.fromMap(maps[i]));
   }
 
   // --- PRICE HISTORY METHODS ---

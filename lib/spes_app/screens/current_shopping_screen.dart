@@ -13,7 +13,10 @@ import '../services/location_service.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
 import 'dart:io';
+import 'dart:async';
 import '../constants/app_strings.dart';
+import '../providers/settings_provider.dart';
+import '../services/promotion_engine.dart';
 
 class CurrentShoppingScreen extends ConsumerStatefulWidget {
   const CurrentShoppingScreen({super.key});
@@ -24,6 +27,9 @@ class CurrentShoppingScreen extends ConsumerStatefulWidget {
 class _CurrentShoppingScreenState extends ConsumerState<CurrentShoppingScreen> {
 
   bool _gpsFetched = false;
+  Timer? _locationTimer;
+  bool _isCheckingLocation = false;
+  bool _isShowingDialog = false;
 
   @override
   void initState() {
@@ -37,7 +43,139 @@ class _CurrentShoppingScreenState extends ConsumerState<CurrentShoppingScreen> {
           }
         });
       }
+      _startLocationTimer();
     });
+  }
+
+  @override
+  void dispose() {
+    _locationTimer?.cancel();
+    super.dispose();
+  }
+
+  void _startLocationTimer() {
+    _locationTimer?.cancel();
+    final interval = ref.read(settingsProvider).locationCheckInterval;
+    _locationTimer = Timer.periodic(Duration(minutes: interval), (timer) {
+      _checkLocationChange();
+    });
+  }
+
+  Future<void> _checkLocationChange() async {
+    if (_isCheckingLocation || _isShowingDialog) return;
+    final activeStoreId = ref.read(activeStoreIdProvider);
+    if (activeStoreId == null) return;
+
+    _isCheckingLocation = true;
+    try {
+      if (!await Geolocator.isLocationServiceEnabled()) return;
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied || permission == LocationPermission.deniedForever) return;
+
+      final pos = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high);
+      final stores = ref.read(storeProvider);
+      final activeStore = stores.where((s) => s.id == activeStoreId).firstOrNull;
+
+      if (activeStore != null && activeStore.latitude != null && activeStore.longitude != null) {
+        final distance = const Distance();
+        final dToActive = distance.as(LengthUnit.Meter, LatLng(pos.latitude, pos.longitude), LatLng(activeStore.latitude!, activeStore.longitude!));
+
+        // Se siamo ancora "dentro" (250m), non facciamo nulla
+        if (dToActive < 250) return;
+
+        // Cerchiamo se siamo vicini a un ALTRO store (radius 100m)
+        Store? foundStore;
+        for (var s in stores) {
+          if (s.id == activeStoreId) continue;
+          if (s.latitude != null && s.longitude != null) {
+            final d = distance.as(LengthUnit.Meter, LatLng(pos.latitude, pos.longitude), LatLng(s.latitude!, s.longitude!));
+            if (d < 100) {
+              foundStore = s;
+              break;
+            }
+          }
+        }
+
+        // Se non trovato in DB, cerchiamo online (Overpass/Nominatim)
+        if (foundStore == null) {
+          final placeName = await LocationService.lookupSupermarketName(pos.latitude, pos.longitude);
+          if (placeName != null) {
+             // Verifichiamo che non sia lo stesso nome dello store attivo (magari stessa catena)
+             if (placeName.toLowerCase() != activeStore.name.toLowerCase()) {
+               _showLocationChangeDialog(placeName, pos.latitude, pos.longitude);
+             }
+          }
+        } else {
+          _showLocationChangeDialog(foundStore.name, foundStore.latitude!, foundStore.longitude!, existingStore: foundStore);
+        }
+      }
+    } catch (_) {
+    } finally {
+      _isCheckingLocation = false;
+    }
+  }
+
+  void _showLocationChangeDialog(String storeName, double lat, double lon, {Store? existingStore}) {
+    if (!mounted || _isShowingDialog) return;
+    
+    setState(() => _isShowingDialog = true);
+    
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        title: const Text(AppStrings.locationChangedTitle),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('${AppStrings.locationChangedMessage}$storeName.'),
+            const SizedBox(height: 12),
+            const Text(AppStrings.locationChangedQuestion),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              setState(() => _isShowingDialog = false);
+            },
+            child: const Text(AppStrings.stayAtCurrentStore),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              String targetStoreId;
+              if (existingStore != null) {
+                targetStoreId = existingStore.id;
+              } else {
+                final newStore = Store(
+                  id: const Uuid().v4(),
+                  name: storeName,
+                  chain: storeName,
+                  latitude: lat,
+                  longitude: lon,
+                );
+                await ref.read(storeProvider.notifier).addStore(newStore);
+                targetStoreId = newStore.id;
+              }
+
+              ref.read(activeStoreIdProvider.notifier).setId(targetStoreId);
+              ref.read(cartProvider.notifier).clear();
+              
+              if (mounted) {
+                Navigator.pop(ctx);
+                setState(() => _isShowingDialog = false);
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                  content: Text('${AppStrings.navPuntiVendita}: $storeName'),
+                  backgroundColor: Colors.indigo,
+                ));
+              }
+            },
+            child: const Text(AppStrings.switchToNewStore),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<String?> _fetchGpsAndStore(WidgetRef ref) async {
@@ -100,6 +238,7 @@ class _CurrentShoppingScreenState extends ConsumerState<CurrentShoppingScreen> {
     final activeStoreId = ref.watch(activeStoreIdProvider);
     final stores = ref.watch(storeProvider);
     final currentStore = stores.where((s) => s.id == activeStoreId).firstOrNull;
+    final settings = ref.watch(settingsProvider);
 
     return Column(
       children: [
@@ -148,40 +287,17 @@ class _CurrentShoppingScreenState extends ConsumerState<CurrentShoppingScreen> {
                     final isFresh = item.barcode.length == 7 && item.barcode.startsWith('2');
                     
                     return ListTile(
-                      leading: item.imageUrl != null && File(item.imageUrl!).existsSync()
-                        ? Container(
-                            width: 48,
-                            height: 48,
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(8),
-                              image: DecorationImage(
-                                image: FileImage(File(item.imageUrl!)),
-                                fit: BoxFit.cover,
-                              ),
-                            ),
-                            child: Align(
-                              alignment: Alignment.bottomRight,
-                              child: Container(
-                                padding: const EdgeInsets.all(2),
-                                decoration: const BoxDecoration(color: Colors.white70, shape: BoxShape.circle),
-                                child: Text('${item.quantity}x', style: const TextStyle(color: Colors.indigo, fontWeight: FontWeight.bold, fontSize: 10)),
-                              ),
-                            ),
-                          )
-                        : CircleAvatar(
-                            backgroundColor: Colors.indigo.shade100,
-                            child: Text('${item.quantity}x', style: const TextStyle(color: Colors.indigo, fontWeight: FontWeight.bold, fontSize: 13)),
-                          ),
+                      leading: _buildItemLeading(item),
                       title: Row(
                         children: [
                           Expanded(child: Text(item.name, style: const TextStyle(fontWeight: FontWeight.bold))),
-                          if (item.status == CartItemStatus.warning)
+                          if (item.status == CartItemStatus.warning && settings.showCartWarnings)
                              Tooltip(
                                message: AppStrings.priceMissingInStore,
                                triggerMode: TooltipTriggerMode.tap,
                                child: const Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 20),
                              ),
-                          if (item.status == CartItemStatus.error)
+                          if (item.status == CartItemStatus.error && settings.showCartWarnings)
                              Tooltip(
                                message: AppStrings.productNotIndexedInStore,
                                triggerMode: TooltipTriggerMode.tap,
@@ -206,34 +322,83 @@ class _CurrentShoppingScreenState extends ConsumerState<CurrentShoppingScreen> {
                       subtitle: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(isFresh ? '${AppStrings.freshIndicatorLabel} - €${item.price.toStringAsFixed(2)}' : '${item.price.toStringAsFixed(2)} ${AppStrings.pricePerUnit}'),
-                          if (item.unitPrice != null && item.unitPrice! > 0)
+                          if (item.isPromoFree && item.originalPrice != null)
+                             Text(
+                               '€${item.originalPrice!.toStringAsFixed(2)}', 
+                               style: const TextStyle(
+                                 decoration: TextDecoration.lineThrough,
+                                 color: Colors.grey,
+                                 fontSize: 12
+                               )
+                             ),
+                          Text(
+                            item.isPromoFree 
+                              ? 'OMAGGIO (€0.00)' 
+                              : isFresh 
+                                ? '${AppStrings.freshIndicatorLabel} - €${item.price.toStringAsFixed(2)}' 
+                                : '${item.price.toStringAsFixed(2)} ${AppStrings.pricePerUnit}',
+                            style: TextStyle(
+                              color: item.isPromoFree ? Colors.green : null,
+                              fontWeight: item.isPromoFree ? FontWeight.bold : null,
+                            ),
+                          ),
+                          if (item.unitPrice != null && item.unitPrice! > 0 && !item.isPromoFree)
                             Text(
-                              '(${item.unitPrice!.toStringAsFixed(2)} €/unità)',
+                              '(${item.unitPrice!.toStringAsFixed(2)} ${isFresh ? '€/Kg' : '€/unità'})',
                               style: TextStyle(fontSize: 11, color: Colors.grey.shade600, fontStyle: FontStyle.italic),
                             ),
                         ],
                       ),
-                      trailing: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          IconButton(
-                            icon: const Icon(Icons.remove_circle_outline, color: Colors.indigo),
-                            onPressed: item.quantity > 1 
-                                ? () => ref.read(cartProvider.notifier).updateQuantity(item.id, item.quantity - 1)
-                                : null,
-                          ),
-                          Text('${item.quantity}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                          IconButton(
-                            icon: const Icon(Icons.add_circle_outline, color: Colors.indigo),
-                            onPressed: () => ref.read(cartProvider.notifier).updateQuantity(item.id, item.quantity + 1),
-                          ),
-                          IconButton(
-                            icon: const Icon(Icons.delete, color: Colors.red),
-                            onPressed: () => ref.read(cartProvider.notifier).removeItem(item.id),
-                          ),
-                        ],
-                      ),
+                      trailing: (() {
+                        final isChild = item.isPromoFree || item.parentId != null;
+                        final canModify = !isChild; // I genitori sono sempre modificabili per gestire i multiset
+                        
+                        return Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            IconButton(
+                              icon: Icon(Icons.remove_circle_outline, color: (item.quantity > 1 && canModify) ? Colors.indigo : Colors.grey),
+                              onPressed: (item.quantity > 1 && canModify)
+                                  ? () => ref.read(cartProvider.notifier).updateQuantity(item.id, item.quantity - 1)
+                                  : null,
+                            ),
+                            Text('${item.quantity}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                            IconButton(
+                              icon: Icon(Icons.add_circle_outline, color: canModify ? Colors.indigo : Colors.grey),
+                              onPressed: canModify
+                                  ? () async {
+                                      final rule = PromotionEngine.getRule(item.promoType);
+                                      if (rule != null && rule.shouldTriggerScan(item.quantity) && mounted) {
+                                        // [FIX] Verifichiamo quanti omaggi abbiamo già riscattato per questo genitore
+                                        final cart = ref.read(cartProvider);
+                                        // Sommiamo correttamente le quantità fisiche degli omaggi
+                                        final currentFreeCount = cart
+                                            .where((i) => i.parentId == item.id)
+                                            .fold<int>(0, (sum, i) => sum + i.quantity);
+                                        // Calcoliamo quanti omaggi dovremmo avere in base ai pezzi paganti attuali
+                                        final expectedFreeCount = (item.quantity ~/ rule.paidPiecesPerSet) * rule.freeItemsCount;
+
+                                        if (currentFreeCount < expectedFreeCount) {
+                                          // Siamo sotto la soglia degli omaggi previsti -> Triggeriamo il dialogo
+                                          await _handlePromoScanning(context, ref, item, rule);
+                                        } else {
+                                          // Abbiamo già tutti gli omaggi per i prodotti attuali -> Aumentiamo i paganti
+                                          ref.read(cartProvider.notifier).updateQuantity(item.id, item.quantity + 1);
+                                        }
+                                      } else {
+                                        // Nessun trigger promozionale (es. 2.5/2 non è intero o promo nulla) -> Aumentiamo i paganti
+                                        ref.read(cartProvider.notifier).updateQuantity(item.id, item.quantity + 1);
+                                      }
+                                    }
+                                  : null,
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.delete, color: Colors.red),
+                              onPressed: () => ref.read(cartProvider.notifier).removeItem(item.id),
+                            ),
+                          ],
+                        );
+                      })(),
                     );
                   },
                 ),
@@ -277,10 +442,10 @@ class _CurrentShoppingScreenState extends ConsumerState<CurrentShoppingScreen> {
                 final products = ref.read(productProvider);
                 final existingProduct = products.where((p) => p.barcode == scannedCode).firstOrNull;
                 String? finalBarcodeToAdd;
+                bool handled = false;
                 
                 if (existingProduct != null) {
                   final currentStoreId = ref.read(activeStoreIdProvider);
-                  bool handled = false;
                   
                   if (currentStoreId != null) {
                     final history = await ref.read(priceHistoryProvider).getHistoryForProduct(scannedCode);
@@ -380,18 +545,29 @@ class _CurrentShoppingScreenState extends ConsumerState<CurrentShoppingScreen> {
                     if (storeHistory == null) status = CartItemStatus.error;
                     else if (price <= 0) status = CartItemStatus.warning;
                   }
-                  ref.read(cartProvider.notifier).addItem(
-                    CartItem(
-                      id: const Uuid().v4(),
-                      barcode: finalBarcodeToAdd,
-                      name: product?.name ?? AppStrings.unknownProduct,
-                      price: price,
-                      unitPrice: product?.pricePerKg,
-                      promoType: latestHistory?.promoType,
-                      imageUrl: product?.imageUrl,
-                      status: status,
-                    )
+                  int qtyToAdd = 1;
+                  if (handled && settings.requireCartConfirmation && mounted) {
+                     final qty = await _askQuantity(context);
+                     if (qty == null) return;
+                     qtyToAdd = qty;
+                  }
+
+                  final newItem = CartItem(
+                    id: const Uuid().v4(),
+                    barcode: finalBarcodeToAdd,
+                    name: product?.name ?? AppStrings.unknownProduct,
+                    price: price,
+                    unitPrice: latestHistory?.unitPrice ?? product?.pricePerKg,
+                    promoType: latestHistory?.promoType,
+                    imageUrl: product?.imageUrl,
+                    status: status,
+                    quantity: qtyToAdd,
                   );
+                  
+                  ref.read(cartProvider.notifier).addItem(newItem);
+
+                  // [MODIFICA] Rimosso l'attivazione automatica al primo scan per evitare di interrompere l'utente.
+                  // Il dialogo apparirà ora solo premendo il tasto '+' nel carrello.
                 }
               }
             },
@@ -399,6 +575,211 @@ class _CurrentShoppingScreenState extends ConsumerState<CurrentShoppingScreen> {
         ),
       ],
     );
+  }
+
+  /// Gestisce la scansione dei prodotti in omaggio quando scatta la soglia di una promozione.
+  Future<void> _handlePromoScanning(BuildContext context, WidgetRef ref, CartItem parent, PromotionRule rule) async {
+    // Quando scatta la soglia, dobbiamo scansionare solo il numero di pezzi omaggio previsti
+    final itemsToScan = rule.freeItemsCount;
+
+    for (int i = 1; i <= itemsToScan; i++) {
+      if (!mounted) return;
+
+      final bool proceed = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: Text(rule.type),
+          content: Text("Ottimo! Hai raggiunto la soglia per l'offerta. Vuoi aggiungere lo stesso prodotto come omaggio o scansionarne uno diverso?"),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false), 
+              child: const Text('Stesso Prodotto'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(ctx, true), 
+              child: const Text('Scansiona Altro'),
+            ),
+          ],
+        ),
+      ) ?? false;
+
+      if (!proceed) {
+        _addFreeItemFromParent(ref, parent);
+        continue;
+      }
+
+      bool itemAdded = false;
+      while (!itemAdded) {
+        if (!mounted) return;
+        final String? scannedCode = await Navigator.push(
+          context,
+          MaterialPageRoute(builder: (context) => const BarcodeScannerScreen()),
+        );
+
+        if (scannedCode != null && mounted) {
+          if (scannedCode == parent.barcode) {
+             _addFreeItemFromParent(ref, parent);
+             itemAdded = true;
+             continue;
+          }
+
+          final products = ref.read(productProvider);
+          var product = products.where((p) => p.barcode == scannedCode).firstOrNull;
+          
+          if (product == null) {
+              final result = await Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => AddProductScreen(initialBarcode: scannedCode, preselectedStoreId: ref.read(activeStoreIdProvider), isFastMode: true)),
+              );
+              
+              final updatedProducts = ref.read(productProvider);
+              product = updatedProducts.where((p) => p.barcode == (result is String ? result : scannedCode)).firstOrNull;
+              
+              if (product == null) {
+                 continue; // Utente ha annullato l'aggiunta
+              }
+          }
+
+          final parentProduct = ref.read(productProvider).where((p) => p.barcode == parent.barcode).firstOrNull;
+          final history = await ref.read(priceHistoryProvider).getHistoryForProduct(scannedCode);
+          final currentStoreId = ref.read(activeStoreIdProvider);
+          final storeHistory = currentStoreId != null ? history.where((h) => h.storeId == currentStoreId).firstOrNull : null;
+          
+          bool isCompatible = false;
+          String errorMessage = '';
+
+          final parentNameWords = parentProduct?.name.toLowerCase().split(RegExp(r'\s+')).where((w) => w.length >= 3).toList() ?? [];
+          final productNameWords = product.name.toLowerCase().split(RegExp(r'\s+')).where((w) => w.length >= 3).toList();
+          
+          bool nameMatch = false;
+          if (parentNameWords.isNotEmpty && productNameWords.isNotEmpty) {
+             if (parentNameWords.first == productNameWords.first) {
+                 nameMatch = true;
+             }
+          }
+
+          final pBrand = product.brand?.toLowerCase().trim() ?? '';
+          final pCat = product.category?.toLowerCase().trim() ?? '';
+          final parentBrand = parentProduct?.brand?.toLowerCase().trim() ?? '';
+          final parentCat = parentProduct?.category?.toLowerCase().trim() ?? '';
+          
+          bool categoryMatch = pCat.isNotEmpty && parentCat.isNotEmpty && pCat == parentCat;
+          bool brandMatch = pBrand.isNotEmpty && parentBrand.isNotEmpty && pBrand == parentBrand;
+          bool priceMatch = storeHistory != null && storeHistory.price == parent.price;
+          bool promoTypeMatch = storeHistory == null || storeHistory.promoType == parent.promoType;
+
+          if (!promoTypeMatch) {
+             errorMessage = 'Il prodotto scansionato non rientra nell\'offerta ${parent.promoType}.';
+          } else if (!categoryMatch) {
+             errorMessage = 'La categoria ($pCat) non combacia. I prodotti in promozione devono appartenere alla stessa categoria ($parentCat).';
+          } else if (!priceMatch && storeHistory != null) {
+             errorMessage = 'Il prezzo base (${storeHistory.price.toStringAsFixed(2)}€) non coincide col prodotto pagante (${parent.price.toStringAsFixed(2)}€).';
+          } else if (!nameMatch && !brandMatch) {
+             errorMessage = 'Devono avere la stessa Marca o lo stesso Nome radice per essere combinati nella promo.';
+          } else {
+             isCompatible = true;
+          }
+
+          if (isCompatible) {
+             final originalPrice = storeHistory?.price ?? (history.isNotEmpty ? history.first.price : 0.0);
+             ref.read(cartProvider.notifier).addItem(
+               CartItem(
+                 id: const Uuid().v4(),
+                 barcode: product.barcode,
+                 name: product.name,
+                 price: 0.0,
+                 unitPrice: storeHistory?.unitPrice ?? product.pricePerKg,
+                 originalPrice: originalPrice,
+                 isPromoFree: true,
+                 parentId: parent.id,
+                 imageUrl: product.imageUrl,
+                 status: CartItemStatus.ok,
+               )
+             );
+             itemAdded = true;
+             if (mounted) {
+               ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                 content: Text('Prodotto omaggio aggiunto con successo!'),
+                 backgroundColor: Colors.green,
+               ));
+             }
+          } else {
+             final bool retry = await showDialog<bool>(
+               context: context,
+               builder: (ctx) => AlertDialog(
+                 title: const Text('Prodotto non compatibile', style: TextStyle(color: Colors.red)),
+                 content: Text(errorMessage),
+                 actions: [
+                   TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Annulla')),
+                   ElevatedButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Riprova Scansione')),
+                 ]
+               )
+             ) ?? false;
+             
+             if (!retry) {
+               break; // Esce dal while loop ma non aggiunge il prodotto clonato
+             }
+          }
+        } else {
+          break; // Scanner annullato
+        }
+      }
+    }
+  }
+
+  /// Helper per aggiungere un prodotto in omaggio usando i dati del prodotto genitore (fallback)
+  void _addFreeItemFromParent(WidgetRef ref, CartItem parent) {
+    ref.read(cartProvider.notifier).addItem(
+      CartItem(
+        id: const Uuid().v4(),
+        barcode: parent.barcode,
+        name: parent.name,
+        price: 0.0,
+        originalPrice: parent.price,
+        isPromoFree: true,
+        parentId: parent.id,
+        imageUrl: parent.imageUrl,
+        status: CartItemStatus.ok,
+      )
+    );
+  }
+
+  Widget _buildItemLeading(dynamic item) {
+    ImageProvider? image;
+    if (item.imageUrl != null) {
+      if (item.imageUrl!.startsWith('http')) {
+        image = NetworkImage(item.imageUrl!);
+      } else if (File(item.imageUrl!).existsSync()) {
+        image = FileImage(File(item.imageUrl!));
+      }
+    }
+
+    if (image != null) {
+      return Container(
+        width: 48,
+        height: 48,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(8),
+          image: DecorationImage(
+            image: image,
+            fit: BoxFit.cover,
+          ),
+        ),
+        child: Align(
+          alignment: Alignment.bottomRight,
+          child: Container(
+            padding: const EdgeInsets.all(2),
+            decoration: const BoxDecoration(color: Colors.white70, shape: BoxShape.circle),
+            child: Text('${item.quantity}x', style: const TextStyle(color: Colors.indigo, fontWeight: FontWeight.bold, fontSize: 10)),
+          ),
+        ),
+      );
+    } else {
+      return CircleAvatar(
+        backgroundColor: Colors.indigo.shade100,
+        child: Text('${item.quantity}x', style: const TextStyle(color: Colors.indigo, fontWeight: FontWeight.bold, fontSize: 13)),
+      );
+    }
   }
 
   void _showStoreSelector(BuildContext context, WidgetRef ref, List<Store> stores) {
@@ -423,6 +804,40 @@ class _CurrentShoppingScreenState extends ConsumerState<CurrentShoppingScreen> {
           },
         );
       },
+    );
+  }
+
+  Future<int?> _askQuantity(BuildContext context) async {
+    int qty = 1;
+    return showDialog<int>(
+      context: context,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return AlertDialog(
+              title: const Text('Quantità da associare', style: TextStyle(fontSize: 18, color: Colors.indigo)),
+              content: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.remove_circle_outline, size: 36, color: Colors.red),
+                    onPressed: qty > 1 ? () => setState(() => qty--) : null,
+                  ),
+                  Text('$qty', style: const TextStyle(fontSize: 32, fontWeight: FontWeight.bold)),
+                  IconButton(
+                    icon: const Icon(Icons.add_circle_outline, size: 36, color: Colors.green),
+                    onPressed: () => setState(() => qty++),
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(onPressed: () => Navigator.pop(ctx, null), child: const Text('Annulla')),
+                ElevatedButton(onPressed: () => Navigator.pop(ctx, qty), child: const Text('Aggiungi')),
+              ],
+            );
+          }
+        );
+      }
     );
   }
 }

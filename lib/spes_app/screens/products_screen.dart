@@ -75,6 +75,29 @@ class _ProductsScreenState extends ConsumerState<ProductsScreen> {
     );
   }
 
+  DecorationImage? _buildProductImage(Product product) {
+    if (product.imageUrl != null) {
+      if (product.imageUrl!.startsWith('http')) {
+        return DecorationImage(
+          image: NetworkImage(product.imageUrl!),
+          fit: BoxFit.cover,
+        );
+      } else if (File(product.imageUrl!).existsSync()) {
+        return DecorationImage(
+          image: FileImage(File(product.imageUrl!)),
+          fit: BoxFit.cover,
+        );
+      }
+    }
+    return null;
+  }
+
+  bool _shouldShowPlaceholder(Product product) {
+    if (product.imageUrl == null) return true;
+    if (product.imageUrl!.startsWith('http')) return false;
+    return !File(product.imageUrl!).existsSync();
+  }
+
   @override
   Widget build(BuildContext context) {
     final products = ref.watch(productProvider);
@@ -217,14 +240,9 @@ class _ProductsScreenState extends ConsumerState<ProductsScreen> {
                                   decoration: BoxDecoration(
                                     borderRadius: BorderRadius.circular(10),
                                     color: Colors.grey.shade100,
-                                    image: (product.imageUrl != null && File(product.imageUrl!).existsSync())
-                                        ? DecorationImage(
-                                            image: FileImage(File(product.imageUrl!)),
-                                            fit: BoxFit.cover,
-                                          )
-                                        : null,
+                                    image: _buildProductImage(product),
                                   ),
-                                  child: (product.imageUrl == null || !File(product.imageUrl!).existsSync())
+                                  child: _shouldShowPlaceholder(product)
                                       ? Icon(Icons.shopping_bag_outlined, color: Colors.indigo.shade200, size: 35)
                                       : null,
                                 ),
