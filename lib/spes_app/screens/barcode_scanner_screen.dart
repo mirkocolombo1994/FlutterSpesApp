@@ -19,6 +19,31 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
     super.dispose();
   }
 
+  bool _isValidRetailBarcode(String barcode) {
+    if (!RegExp(r'^\d+$').hasMatch(barcode)) return false; // Solo numeri
+
+    // Eccezione per i codici brevi "freschi" della nostra logica SpesApp (7 cifre, iniziano con 2)
+    if (barcode.length == 7 && barcode.startsWith('2')) return true;
+
+    // Lunghezza tipica EAN-8, UPC, EAN-13, ITF-14
+    if (barcode.length < 8 || barcode.length > 14) return false;
+
+    // Formula Modulo 10 (Checksum per EAN/UPC)
+    // Partendo da destra a sinistra (escludendo l'ultima cifra che è il check digit),
+    // si moltiplicano le posizioni per 3 o per 1 in modo alternato e si somma tutto.
+    int sum = 0;
+    int multiplier = 3;
+    for (int i = barcode.length - 2; i >= 0; i--) {
+      sum += int.parse(barcode[i]) * multiplier;
+      multiplier = multiplier == 3 ? 1 : 3; // Alterna 3 e 1
+    }
+
+    int expectedCheckDigit = (10 - (sum % 10)) % 10;
+    int actualCheckDigit = int.parse(barcode[barcode.length - 1]);
+
+    return expectedCheckDigit == actualCheckDigit;
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -31,9 +56,11 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
           final List<Barcode> barcodes = capture.barcodes;
           if (barcodes.isNotEmpty && barcodes.first.rawValue != null) {
             final barcodeValue = barcodes.first.rawValue!;
-            _controller.stop();
-            // Go back to the previous screen passing the barcode string
-            if(mounted) Navigator.pop(context, barcodeValue);
+            
+            if (_isValidRetailBarcode(barcodeValue)) {
+               _controller.stop();
+               if(mounted) Navigator.pop(context, barcodeValue);
+            }
           }
         },
       ),
