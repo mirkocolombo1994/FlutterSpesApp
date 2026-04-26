@@ -289,7 +289,19 @@ class _CurrentShoppingScreenState extends ConsumerState<CurrentShoppingScreen> {
                     final isFresh = item.barcode.length == 7 && item.barcode.startsWith('2');
                     
                     return ListTile(
-                      leading: _buildItemLeading(item),
+                      leading: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          IconButton(
+                            icon: const Icon(Icons.delete_outline, color: Colors.red, size: 24),
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(),
+                            onPressed: () => ref.read(cartProvider.notifier).removeItem(item.id),
+                          ),
+                          const SizedBox(width: 8),
+                          _buildItemLeading(item),
+                        ],
+                      ),
                       title: Row(
                         children: [
                           Expanded(child: Text(item.name, style: const TextStyle(fontWeight: FontWeight.bold))),
@@ -393,10 +405,6 @@ class _CurrentShoppingScreenState extends ConsumerState<CurrentShoppingScreen> {
                                       }
                                     }
                                   : null,
-                            ),
-                            IconButton(
-                              icon: const Icon(Icons.delete, color: Colors.red),
-                              onPressed: () => ref.read(cartProvider.notifier).removeItem(item.id),
                             ),
                           ],
                         );
