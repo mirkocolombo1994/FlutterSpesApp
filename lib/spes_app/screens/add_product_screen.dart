@@ -512,6 +512,24 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
                 padding: const EdgeInsets.all(16.0),
                 child: Column(
                   children: [
+                    if (widget.initialBarcode != null)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 12.0),
+                        child: Row(
+                          children: [
+                            Icon(Icons.qr_code, size: 14, color: Colors.grey.shade600),
+                            const SizedBox(width: 6),
+                            Text(
+                              'Barcode: ${widget.initialBarcode}',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.grey.shade600,
+                                fontStyle: FontStyle.italic,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                     if (!widget.isFastMode) ...[
                       Row(
                         children: [
