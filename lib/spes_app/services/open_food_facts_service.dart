@@ -105,25 +105,46 @@ class OpenFoodFactsService {
   _NormalizedQuantity _normalizeQuantity(String quantity) {
     if (quantity.isEmpty) return _NormalizedQuantity(null, AppStrings.unitKg);
 
-    final clean = quantity.toLowerCase().replaceAll(',', '.');
-    final numberMatch = RegExp(r'(\d+(\.\d+)?)').firstMatch(clean);
+    // Pulizia e standardizzazione
+    String clean = quantity.toLowerCase().replaceAll(',', '.').trim();
     
-    if (numberMatch == null) return _NormalizedQuantity(null, AppStrings.unitKg);
+    // 1. Gestione pacchi multipli (es. "6 x 100g", "6x100 ml", "6*1.5L")
+    final multiMatch = RegExp(r'(\d+)\s*[xX*]\s*(\d+(?:\.\d+)?)').firstMatch(clean);
     
-    double value = double.parse(numberMatch.group(1)!);
+    double? value;
+    if (multiMatch != null) {
+      final count = double.parse(multiMatch.group(1)!);
+      final singleValue = double.parse(multiMatch.group(2)!);
+      value = count * singleValue;
+    } else {
+      // 2. Estrazione numero semplice
+      final numberMatch = RegExp(r'(\d+(?:\.\d+)?)').firstMatch(clean);
+      if (numberMatch != null) {
+        value = double.parse(numberMatch.group(1)!);
+      }
+    }
+
+    if (value == null) return _NormalizedQuantity(null, AppStrings.unitKg);
+
+    // 3. Rilevamento unità di misura (l'ordine conta)
     String unit = AppStrings.unitKg;
 
-    if (clean.contains(' g') || clean.endsWith('g')) {
-      value = value / 1000;
-      unit = AppStrings.unitKg;
-    } else if (clean.contains('ml')) {
-      value = value / 1000;
-      unit = AppStrings.unitL;
+    if (clean.contains('ml')) {
+      unit = AppStrings.unitMl;
+    } else if (clean.contains('cl')) {
+      value = value * 10;
+      unit = AppStrings.unitMl;
+    } else if (clean.contains('dl')) {
+      value = value * 100;
+      unit = AppStrings.unitMl;
     } else if (clean.contains('kg')) {
       unit = AppStrings.unitKg;
-    } else if (clean.contains(' l') || clean.endsWith('l')) {
+    } else if (clean.contains('g')) {
+      // Se troviamo 'g' ma non 'kg' (già controllato sopra)
+      unit = AppStrings.unitG;
+    } else if (clean.contains(' l') || clean.endsWith('l') || clean.contains('lt')) {
       unit = AppStrings.unitL;
-    } else if (clean.contains('pz') || clean.contains('unit')) {
+    } else if (clean.contains('pz') || clean.contains('unit') || clean.contains('pc')) {
       unit = AppStrings.unitPz;
     }
 
