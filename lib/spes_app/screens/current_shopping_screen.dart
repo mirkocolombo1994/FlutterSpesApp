@@ -17,6 +17,8 @@ import 'dart:async';
 import '../constants/app_strings.dart';
 import '../providers/settings_provider.dart';
 import '../services/promotion_engine.dart';
+import 'package:intl/intl.dart';
+
 
 class CurrentShoppingScreen extends ConsumerStatefulWidget {
   const CurrentShoppingScreen({super.key});
@@ -460,20 +462,81 @@ class _CurrentShoppingScreenState extends ConsumerState<CurrentShoppingScreen> {
                         if (mounted) {
                           final bool? confirmed = await showDialog<bool>(
                             context: context,
-                            builder: (context) => AlertDialog(
-                              title: const Text(AppStrings.priceValidationTitle),
-                              content: Text('${AppStrings.priceValidationMessage}${storeHistory.price.toStringAsFixed(2)}${AppStrings.priceValidationQuestion}'),
-                              actions: [
-                                TextButton(
-                                  onPressed: () => Navigator.pop(context, false),
-                                  child: const Text(AppStrings.priceChanged),
+                            builder: (context) {
+                              final historyDate = DateTime.fromMillisecondsSinceEpoch(storeHistory.timestamp);
+                              final dateStr = DateFormat('dd/MM/yyyy HH:mm').format(historyDate);
+                              
+                              return AlertDialog(
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                                title: Row(
+                                  children: [
+                                    const Icon(Icons.history, color: Colors.indigo),
+                                    const SizedBox(width: 10),
+                                    const Text(AppStrings.priceValidationTitle, style: TextStyle(fontWeight: FontWeight.bold)),
+                                  ],
                                 ),
-                                ElevatedButton(
-                                  onPressed: () => Navigator.pop(context, true),
-                                  child: const Text(AppStrings.priceConfirmed),
+                                content: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const Text(AppStrings.lastPrice, style: TextStyle(fontSize: 14, color: Colors.grey)),
+                                    const SizedBox(height: 8),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                                      decoration: BoxDecoration(
+                                        color: Colors.indigo.shade50,
+                                        borderRadius: BorderRadius.circular(12),
+                                        border: Border.all(color: Colors.indigo.shade100),
+                                      ),
+                                      child: Text(
+                                        '€ ${storeHistory.price.toStringAsFixed(2)}',
+                                        style: const TextStyle(
+                                          fontSize: 32,
+                                          fontWeight: FontWeight.bold,
+                                          color: Colors.indigo,
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 8),
+                                    Text(
+                                      'Rilevato il: $dateStr',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        fontStyle: FontStyle.italic,
+                                        color: Colors.grey.shade600,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 24),
+                                    Text(
+                                      AppStrings.priceValidationQuestion.replaceAll('?', '').trim() + '?',
+                                      textAlign: TextAlign.center,
+                                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+                                    ),
+                                  ],
                                 ),
-                              ],
-                            ),
+                                actionsPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                                actions: [
+                                  TextButton(
+                                    style: TextButton.styleFrom(
+                                      foregroundColor: Colors.red,
+                                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                    ),
+                                    onPressed: () => Navigator.pop(context, false),
+                                    child: const Text(AppStrings.priceChanged, style: TextStyle(fontWeight: FontWeight.bold)),
+                                  ),
+                                  ElevatedButton(
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: Colors.green,
+                                      foregroundColor: Colors.white,
+                                      elevation: 2,
+                                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                    ),
+                                    onPressed: () => Navigator.pop(context, true),
+                                    child: const Text(AppStrings.priceConfirmed, style: TextStyle(fontWeight: FontWeight.bold)),
+                                  ),
+                                ],
+                              );
+                            },
                           );
                           
                           if (confirmed == true) {
