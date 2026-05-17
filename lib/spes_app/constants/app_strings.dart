@@ -192,6 +192,11 @@ class AppStrings {
   static const String promoCutPrice = 'Prezzo Tagliato';
   static const String promo1plus1 = '1+1';
   static const String promo3x2 = '3x2';
+  static const String promoSottocosto = 'Sottocosto';
+  static const String promoSoloCarta = 'Solo con Carta';
+  static const String promoMetaPrezzo = 'Metà Prezzo';
+  static const String promoPrezzoFidaty = 'Prezzo Fidaty';
+  static const String promoSecondo1Cent = '2° a 0.01€';
   static const String promoOther = 'Altro';
 
   // Units

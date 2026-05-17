@@ -3,11 +3,12 @@ class PriceHistory {
   final String productBarcode;
   final String storeId;
   final double price;
-  final int timestamp; // Unix timestamp in milliseconds
+  final int timestamp;
   final String? promoType;
   final int? promoValidUntil;
-  final double? unitPrice;    // Prezzo calcolato per Unità (es. al Kg)
-  final double? weightRecorded; // Peso inserito al momento della rilevazione
+  final double? unitPrice;
+  final double? weightRecorded;
+  final double? originalPrice;
 
   PriceHistory({
     required this.id,
@@ -19,6 +20,7 @@ class PriceHistory {
     this.promoValidUntil,
     this.unitPrice,
     this.weightRecorded,
+    this.originalPrice,
   });
 
   Map<String, dynamic> toMap() {
@@ -32,6 +34,7 @@ class PriceHistory {
       'promo_valid_until': promoValidUntil,
       'unit_price': unitPrice,
       'weight_recorded': weightRecorded,
+      'original_price': originalPrice,
     };
   }
 
@@ -46,6 +49,7 @@ class PriceHistory {
       promoValidUntil: map['promo_valid_until'],
       unitPrice: map['unit_price'],
       weightRecorded: map['weight_recorded'],
+      originalPrice: map['original_price'],
     );
   }
 }

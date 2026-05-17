@@ -48,6 +48,7 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
   final _priceController = TextEditingController();
   final _pricePerKgController = TextEditingController();
   final _discountPercentController = TextEditingController();
+  final _originalPriceController = TextEditingController();
   final _priceFocusNode = FocusNode();
 
   String _description = '';
@@ -59,6 +60,11 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
     AppStrings.promoNone,
     AppStrings.promoDiscountPercent,
     AppStrings.promoCutPrice,
+    AppStrings.promoSottocosto,
+    AppStrings.promoSoloCarta,
+    AppStrings.promoMetaPrezzo,
+    AppStrings.promoPrezzoFidaty,
+    AppStrings.promoSecondo1Cent,
     AppStrings.promo1plus1,
     AppStrings.promo3x2,
     AppStrings.promoOther,
@@ -97,6 +103,7 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
     _priceController.dispose();
     _pricePerKgController.dispose();
     _discountPercentController.dispose();
+    _originalPriceController.dispose();
     _priceFocusNode.dispose();
     super.dispose();
   }
@@ -150,20 +157,63 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
     final history = await ref
         .read(priceHistoryProvider)
         .getHistoryForProduct(searchBarcode);
-    if (widget.preselectedStoreId != null) {
-      // Già impostato in initState
-    } else if (history.isNotEmpty && mounted) {
+    
+    PriceHistory? validHistory;
+    final targetStoreId = widget.preselectedStoreId ?? _selectedStoreId;
+
+    if (targetStoreId != null) {
+      validHistory = history.where((h) => h.storeId == targetStoreId).firstOrNull;
+    }
+
+    if (validHistory == null && history.isNotEmpty) {
       final stores = ref.read(storeProvider);
-      // Cerchiamo il primo record nello storico che faccia riferimento a un supermercato ancora esistente
-      final validHistory = history
+      validHistory = history
           .where((h) => stores.any((s) => s.id == h.storeId))
           .firstOrNull;
+    }
 
-      if (validHistory != null) {
-        setState(() {
-          _selectedStoreId = validHistory.storeId;
-        });
-      }
+    if (validHistory != null && mounted) {
+      final historyData = validHistory;
+      setState(() {
+        _selectedStoreId = historyData.storeId;
+        
+        // Se è un codice a barre fresco con prezzo valido, evitiamo di sovrascrivere
+        // il prezzo estratto dal barcode con quello vecchio.
+        final isFreshBarcodeWithPrice = code.length == 13 && code.startsWith('2') &&
+            double.tryParse(code.substring(7, 12)) != null &&
+            (double.tryParse(code.substring(7, 12)) ?? 0) > 0;
+        if (!isFreshBarcodeWithPrice) {
+          _priceController.text = historyData.price.toStringAsFixed(2);
+        }
+        
+        // Caricamento promo
+        if (historyData.promoType != null) {
+          // Gestione speciale per lo sconto percentuale salvato come stringa
+          if (historyData.promoType!.startsWith('Sconto ')) {
+            _promoType = AppStrings.promoDiscountPercent;
+            final percent = historyData.promoType!
+                .replaceAll('Sconto ', '')
+                .replaceAll('%', '');
+            _discountPercentController.text = percent;
+          } else if (_promoTypes.contains(historyData.promoType)) {
+            _promoType = historyData.promoType!;
+          } else {
+            _promoType = AppStrings.promoOther;
+          }
+          
+          if (historyData.promoValidUntil != null) {
+            _promoValidUntil = DateTime.fromMillisecondsSinceEpoch(
+              historyData.promoValidUntil!,
+            );
+          }
+        }
+
+        if (historyData.originalPrice != null) {
+          _originalPriceController.text = 
+              historyData.originalPrice!.toStringAsFixed(2);
+        }
+      });
+      _calculatePricePerKg();
     }
 
     if (existingProduct != null) {
@@ -278,6 +328,56 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
         );
       }
     }
+  }
+
+  void _onPriceChanged(String val) {
+    _calculatePricePerKg();
+    final price = double.tryParse(val.replaceAll(',', '.'));
+    if (price == null || price <= 0) return;
+
+    if (_promoType == AppStrings.promoDiscountPercent &&
+        _discountPercentController.text.isNotEmpty) {
+      final discount = double.tryParse(
+        _discountPercentController.text.replaceAll(',', '.'),
+      );
+      if (discount != null && discount > 0 && discount < 100) {
+        final originalPrice = price / (1 - discount / 100);
+        _originalPriceController.text = originalPrice.toStringAsFixed(2);
+      }
+    } else if (_shouldShowOriginalPrice() &&
+        _originalPriceController.text.isNotEmpty) {
+      final originalPrice = double.tryParse(
+        _originalPriceController.text.replaceAll(',', '.'),
+      );
+      if (originalPrice != null && originalPrice > price) {
+        final discount = (1 - price / originalPrice) * 100;
+        _discountPercentController.text =
+            discount.toStringAsFixed(discount == discount.roundToDouble() ? 0 : 1);
+      }
+    }
+  }
+
+  void _onDiscountChanged(String val) {
+    final discount = double.tryParse(val.replaceAll(',', '.'));
+    final price = double.tryParse(_priceController.text.replaceAll(',', '.'));
+    if (discount == null || price == null || price <= 0) return;
+
+    if (discount > 0 && discount < 100) {
+      final originalPrice = price / (1 - discount / 100);
+      _originalPriceController.text = originalPrice.toStringAsFixed(2);
+    } else if (discount == 0) {
+      _originalPriceController.text = price.toStringAsFixed(2);
+    }
+  }
+
+  void _onOriginalPriceChanged(String val) {
+    final originalPrice = double.tryParse(val.replaceAll(',', '.'));
+    final price = double.tryParse(_priceController.text.replaceAll(',', '.'));
+    if (originalPrice == null || price == null || price <= 0 || originalPrice <= price) return;
+
+    final discount = (1 - price / originalPrice) * 100;
+    _discountPercentController.text =
+        discount.toStringAsFixed(discount == discount.roundToDouble() ? 0 : 1);
   }
 
   Future<void> _pickImage(ImageSource source) async {
@@ -424,8 +524,9 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
               ),
             );
 
-            if (confirmed != true)
+            if (confirmed != true) {
               return; // L'utente ha annullato il salvataggio
+            }
           }
         }
 
@@ -441,6 +542,11 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
           weightRecorded: double.tryParse(
             _weightController.text.replaceAll(',', '.'),
           ),
+          originalPrice: _shouldShowOriginalPrice()
+              ? double.tryParse(
+                _originalPriceController.text.replaceAll(',', '.'),
+              )
+              : null,
         );
         await ref.read(priceHistoryProvider).addPriceHistory(prHistory);
 
@@ -552,8 +658,9 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
                                       const BarcodeScannerScreen(),
                                 ),
                               );
-                              if (scannedCode != null)
+                              if (scannedCode != null) {
                                 _processScannedBarcode(scannedCode);
+                              }
                             },
                           ),
                         ],
@@ -771,6 +878,7 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
                                   const TextInputType.numberWithOptions(
                                     decimal: true,
                                   ),
+                              onChanged: _onPriceChanged,
                             ),
                           ),
                           const SizedBox(width: 12),
@@ -891,6 +999,22 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
                               border: OutlineInputBorder(),
                             ),
                             keyboardType: TextInputType.number,
+                            onChanged: _onDiscountChanged,
+                          ),
+                        ],
+                        if (_shouldShowOriginalPrice()) ...[
+                          const SizedBox(height: 16),
+                          TextFormField(
+                            controller: _originalPriceController,
+                            decoration: const InputDecoration(
+                              labelText: 'Prezzo Originale (Non scontato) €',
+                              border: OutlineInputBorder(),
+                              prefixIcon: Icon(Icons.strikethrough_s, color: Colors.red),
+                            ),
+                            keyboardType: const TextInputType.numberWithOptions(
+                              decimal: true,
+                            ),
+                            onChanged: _onOriginalPriceChanged,
                           ),
                         ],
                       ],
@@ -980,8 +1104,9 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
                                       builder: (_) => const AddStoreScreen(),
                                     ),
                                   );
-                                  if (id != null)
+                                  if (id != null) {
                                     setState(() => _selectedStoreId = id);
+                                  }
                                 },
                               ),
                             ],
@@ -997,6 +1122,7 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
                             keyboardType: const TextInputType.numberWithOptions(
                               decimal: true,
                             ),
+                            onChanged: _onPriceChanged,
                           ),
                           const SizedBox(height: 16),
                           DropdownButtonFormField<String>(
@@ -1026,6 +1152,22 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
                                 border: OutlineInputBorder(),
                               ),
                               keyboardType: TextInputType.number,
+                              onChanged: _onDiscountChanged,
+                            ),
+                          ],
+                          if (_shouldShowOriginalPrice()) ...[
+                            const SizedBox(height: 16),
+                            TextFormField(
+                              controller: _originalPriceController,
+                              decoration: const InputDecoration(
+                                labelText: 'Prezzo Originale (Non scontato) €',
+                                border: OutlineInputBorder(),
+                                prefixIcon: Icon(Icons.strikethrough_s, color: Colors.red),
+                              ),
+                              keyboardType: const TextInputType.numberWithOptions(
+                                decimal: true,
+                              ),
+                              onChanged: _onOriginalPriceChanged,
                             ),
                           ],
                           if (_promoType != AppStrings.promoNone)
@@ -1069,6 +1211,20 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
         onPressed: onPressed,
       ),
     );
+  }
+
+  bool _shouldShowOriginalPrice() {
+    final discountPromos = [
+      AppStrings.promoDiscountPercent,
+      AppStrings.promoCutPrice,
+      AppStrings.promoSottocosto,
+      AppStrings.promoSoloCarta,
+      AppStrings.promoMetaPrezzo,
+      AppStrings.promoPrezzoFidaty,
+      AppStrings.promoSecondo1Cent,
+      AppStrings.promoOther,
+    ];
+    return discountPromos.contains(_promoType);
   }
 
   Widget _buildExpiryPicker() {

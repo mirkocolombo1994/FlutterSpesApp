@@ -26,7 +26,7 @@ class SpesAppDatabaseHelper {
 
     return await openDatabase(
       path,
-      version: 10,
+      version: 11,
       onCreate: _createDB,
       onUpgrade: _upgradeDB,
       onConfigure: (db) async {
@@ -104,6 +104,11 @@ class SpesAppDatabaseHelper {
         await db.execute('ALTER TABLE price_history ADD COLUMN weight_recorded REAL');
       } catch (_) {}
     }
+    if (oldVersion < 11) {
+      try {
+        await db.execute('ALTER TABLE price_history ADD COLUMN original_price REAL');
+      } catch (_) {}
+    }
   }
 
   Future _createDB(Database db, int version) async {
@@ -175,6 +180,7 @@ class SpesAppDatabaseHelper {
         promo_valid_until INTEGER,
         unit_price REAL,
         weight_recorded REAL,
+        original_price REAL,
         FOREIGN KEY (product_barcode) REFERENCES products (barcode) ON DELETE CASCADE,
         FOREIGN KEY (store_id) REFERENCES stores (id) ON DELETE CASCADE
       )

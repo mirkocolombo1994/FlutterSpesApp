@@ -31,6 +31,7 @@ class _CurrentShoppingScreenState extends ConsumerState<CurrentShoppingScreen> {
   Timer? _locationTimer;
   bool _isCheckingLocation = false;
   bool _isShowingDialog = false;
+  final ScrollController _scrollController = ScrollController();
 
   @override
   void initState() {
@@ -51,6 +52,7 @@ class _CurrentShoppingScreenState extends ConsumerState<CurrentShoppingScreen> {
   @override
   void dispose() {
     _locationTimer?.cancel();
+    _scrollController.dispose();
     super.dispose();
   }
 
@@ -278,6 +280,20 @@ class _CurrentShoppingScreenState extends ConsumerState<CurrentShoppingScreen> {
 
   @override
   Widget build(BuildContext context) {
+    ref.listen<List<CartItem>>(cartProvider, (previous, next) {
+      if (next.length > (previous?.length ?? 0)) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (_scrollController.hasClients) {
+            _scrollController.animateTo(
+              _scrollController.position.maxScrollExtent,
+              duration: const Duration(milliseconds: 300),
+              curve: Curves.easeOut,
+            );
+          }
+        });
+      }
+    });
+
     final cartItems = ref.watch(cartProvider);
     final total = cartItems.fold<double>(
       0,
@@ -337,6 +353,7 @@ class _CurrentShoppingScreenState extends ConsumerState<CurrentShoppingScreen> {
                   ),
                 )
               : ListView.builder(
+                  controller: _scrollController,
                   itemCount: cartItems.length,
                   itemBuilder: (context, index) {
                     final item = cartItems[index];
@@ -431,7 +448,7 @@ class _CurrentShoppingScreenState extends ConsumerState<CurrentShoppingScreen> {
                       subtitle: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          if (item.isPromoFree && item.originalPrice != null)
+                          if (item.originalPrice != null)
                             Text(
                               '€${item.originalPrice!.toStringAsFixed(2)}',
                               style: const TextStyle(
@@ -632,9 +649,22 @@ class _CurrentShoppingScreenState extends ConsumerState<CurrentShoppingScreen> {
                     ref.read(activeStoreIdProvider) == null) {
                   ref.read(activeStoreIdProvider.notifier).setId(storeId);
                 }
+                
+                final isFreshBarcode = scannedCode.length == 13 && scannedCode.startsWith('2');
+                final searchBarcode = isFreshBarcode ? scannedCode.substring(0, 7) : scannedCode;
+                
+                double? freshPrice;
+                if (isFreshBarcode) {
+                  final priceDigits = scannedCode.substring(7, 12);
+                  final parsedPrice = double.tryParse(priceDigits);
+                  if (parsedPrice != null && parsedPrice > 0) {
+                    freshPrice = parsedPrice / 100.0;
+                  }
+                }
+
                 final products = ref.read(productProvider);
                 final existingProduct = products
-                    .where((p) => p.barcode == scannedCode)
+                    .where((p) => p.barcode == searchBarcode)
                     .firstOrNull;
                 String? finalBarcodeToAdd;
                 bool handled = false;
@@ -645,7 +675,7 @@ class _CurrentShoppingScreenState extends ConsumerState<CurrentShoppingScreen> {
                   if (currentStoreId != null) {
                     final history = await ref
                         .read(priceHistoryProvider)
-                        .getHistoryForProduct(scannedCode);
+                        .getHistoryForProduct(searchBarcode);
                     final storeHistory = history
                         .where((h) => h.storeId == currentStoreId)
                         .firstOrNull;
@@ -655,176 +685,240 @@ class _CurrentShoppingScreenState extends ConsumerState<CurrentShoppingScreen> {
                         storeHistory.timestamp,
                       );
                       final now = DateTime.now();
-                      bool isSameDay =
-                          historyDate.year == now.year &&
-                          historyDate.month == now.month &&
-                          historyDate.day == now.day;
+                      
+                      if (isFreshBarcode) {
+                        // Prodotti freschi censiti bypassano la dialog di validazione
+                        // e registrano sempre il prezzo dal codice a barre
+                        final finalPrice = freshPrice ?? storeHistory.price;
+                        await ref
+                            .read(priceHistoryProvider)
+                            .addPriceHistory(
+                              PriceHistory(
+                                id: const Uuid().v4(),
+                                productBarcode: searchBarcode,
+                                storeId: currentStoreId,
+                                price: finalPrice,
+                                timestamp: now.millisecondsSinceEpoch,
+                                promoType: storeHistory.promoType,
+                                promoValidUntil: storeHistory.promoValidUntil,
+                                originalPrice: storeHistory.originalPrice,
+                              ),
+                            );
+                        finalBarcodeToAdd = searchBarcode;
+                        handled = true;
+                      } else {
+                        bool isSameDay =
+                            historyDate.year == now.year &&
+                            historyDate.month == now.month &&
+                            historyDate.day == now.day;
 
-                      if (!isSameDay) {
-                        if (mounted) {
-                          final bool? confirmed = await showDialog<bool>(
-                            context: context,
-                            builder: (context) {
-                              final historyDate =
-                                  DateTime.fromMillisecondsSinceEpoch(
-                                    storeHistory.timestamp,
-                                  );
-                              final dateStr = DateFormat(
-                                'dd/MM/yyyy HH:mm',
-                              ).format(historyDate);
+                        if (!isSameDay) {
+                          if (mounted) {
+                            final bool? confirmed = await showDialog<bool>(
+                              context: context,
+                              builder: (context) {
+                                final historyDate =
+                                    DateTime.fromMillisecondsSinceEpoch(
+                                      storeHistory.timestamp,
+                                    );
+                                final dateStr = DateFormat(
+                                  'dd/MM/yyyy HH:mm',
+                                ).format(historyDate);
 
-                              return AlertDialog(
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(20),
-                                ),
-                                title: Row(
-                                  children: [
-                                    const Icon(
-                                      Icons.history,
-                                      color: Colors.indigo,
-                                    ),
-                                    const SizedBox(width: 10),
-                                    const Text(
-                                      AppStrings.priceValidationTitle,
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.bold,
+                                return AlertDialog(
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(20),
+                                  ),
+                                  title: Row(
+                                    children: [
+                                      const Icon(
+                                        Icons.history,
+                                        color: Colors.indigo,
                                       ),
-                                    ),
-                                  ],
-                                ),
-                                content: Column(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    const Text(
-                                      AppStrings.lastPrice,
-                                      style: TextStyle(
-                                        fontSize: 14,
-                                        color: Colors.grey,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 8),
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 20,
-                                        vertical: 12,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: Colors.indigo.shade50,
-                                        borderRadius: BorderRadius.circular(12),
-                                        border: Border.all(
-                                          color: Colors.indigo.shade100,
-                                        ),
-                                      ),
-                                      child: Text(
-                                        '€ ${storeHistory.price.toStringAsFixed(2)}',
-                                        style: const TextStyle(
-                                          fontSize: 32,
+                                      const SizedBox(width: 10),
+                                      const Text(
+                                        AppStrings.priceValidationTitle,
+                                        style: TextStyle(
                                           fontWeight: FontWeight.bold,
-                                          color: Colors.indigo,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  content: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      const Text(
+                                        AppStrings.lastPrice,
+                                        style: TextStyle(
+                                          fontSize: 14,
+                                          color: Colors.grey,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 8),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 20,
+                                          vertical: 12,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: Colors.indigo.shade50,
+                                          borderRadius: BorderRadius.circular(12),
+                                          border: Border.all(
+                                            color: Colors.indigo.shade100,
+                                          ),
+                                        ),
+                                        child: Text(
+                                          '€ ${storeHistory.price.toStringAsFixed(2)}',
+                                          style: const TextStyle(
+                                            fontSize: 32,
+                                            fontWeight: FontWeight.bold,
+                                            color: Colors.indigo,
+                                          ),
+                                        ),
+                                      ),
+                                      if (storeHistory.promoType != null) ...[
+                                        const SizedBox(height: 12),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 12,
+                                            vertical: 6,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: Colors.orange.shade50,
+                                            borderRadius: BorderRadius.circular(8),
+                                            border: Border.all(
+                                              color: Colors.orange.shade200,
+                                            ),
+                                          ),
+                                          child: Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              const Icon(
+                                                Icons.local_offer,
+                                                color: Colors.orange,
+                                                size: 16,
+                                              ),
+                                              const SizedBox(width: 6),
+                                              Flexible(
+                                                child: Text(
+                                                  'Promo: ${storeHistory.promoType}',
+                                                  style: const TextStyle(
+                                                    color: Colors.orange,
+                                                    fontWeight: FontWeight.bold,
+                                                    fontSize: 13,
+                                                  ),
+                                                  overflow: TextOverflow.ellipsis,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ],
+                                      const SizedBox(height: 8),
+                                      Text(
+                                        'Rilevato il: $dateStr',
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          fontStyle: FontStyle.italic,
+                                          color: Colors.grey.shade600,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 24),
+                                      Text(
+                                        storeHistory.promoType != null
+                                            ? "Il prezzo è rimasto lo stesso ed è ancora attiva la promozione?"
+                                            : AppStrings.priceValidationQuestion
+                                                    .replaceAll('?', '')
+                                                    .trim() +
+                                                '?',
+                                        textAlign: TextAlign.center,
+                                        style: const TextStyle(
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  actionsPadding: const EdgeInsets.symmetric(
+                                    horizontal: 16,
+                                    vertical: 12,
+                                  ),
+                                  actions: [
+                                    TextButton(
+                                      style: TextButton.styleFrom(
+                                        foregroundColor: Colors.red,
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 12,
+                                          vertical: 8,
+                                        ),
+                                      ),
+                                      onPressed: () =>
+                                          Navigator.pop(context, false),
+                                      child: const Text(
+                                        AppStrings.priceChanged,
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.bold,
                                         ),
                                       ),
                                     ),
-                                    const SizedBox(height: 8),
-                                    Text(
-                                      'Rilevato il: $dateStr',
-                                      style: TextStyle(
-                                        fontSize: 12,
-                                        fontStyle: FontStyle.italic,
-                                        color: Colors.grey.shade600,
+                                    ElevatedButton(
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: Colors.green,
+                                        foregroundColor: Colors.white,
+                                        elevation: 2,
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 20,
+                                          vertical: 8,
+                                        ),
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(10),
+                                        ),
                                       ),
-                                    ),
-                                    const SizedBox(height: 24),
-                                    Text(
-                                      AppStrings.priceValidationQuestion
-                                              .replaceAll('?', '')
-                                              .trim() +
-                                          '?',
-                                      textAlign: TextAlign.center,
-                                      style: const TextStyle(
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.w500,
+                                      onPressed: () =>
+                                          Navigator.pop(context, true),
+                                      child: const Text(
+                                        AppStrings.priceConfirmed,
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                        ),
                                       ),
                                     ),
                                   ],
-                                ),
-                                actionsPadding: const EdgeInsets.symmetric(
-                                  horizontal: 16,
-                                  vertical: 12,
-                                ),
-                                actions: [
-                                  TextButton(
-                                    style: TextButton.styleFrom(
-                                      foregroundColor: Colors.red,
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 12,
-                                        vertical: 8,
-                                      ),
-                                    ),
-                                    onPressed: () =>
-                                        Navigator.pop(context, false),
-                                    child: const Text(
-                                      AppStrings.priceChanged,
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                  ),
-                                  ElevatedButton(
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: Colors.green,
-                                      foregroundColor: Colors.white,
-                                      elevation: 2,
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 20,
-                                        vertical: 8,
-                                      ),
-                                      shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(10),
-                                      ),
-                                    ),
-                                    onPressed: () =>
-                                        Navigator.pop(context, true),
-                                    child: const Text(
-                                      AppStrings.priceConfirmed,
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              );
-                            },
-                          );
-
-                          if (confirmed == true) {
-                            await ref
-                                .read(priceHistoryProvider)
-                                .addPriceHistory(
-                                  PriceHistory(
-                                    id: const Uuid().v4(),
-                                    productBarcode: scannedCode,
-                                    storeId: currentStoreId,
-                                    price: storeHistory.price,
-                                    timestamp: now.millisecondsSinceEpoch,
-                                    promoType: storeHistory.promoType,
-                                    promoValidUntil:
-                                        storeHistory.promoValidUntil,
-                                  ),
                                 );
-                            finalBarcodeToAdd = scannedCode;
-                            handled = true;
-                          } else if (confirmed == false) {
-                            // Leave handled = false to trigger AddProductScreen below
+                              },
+                            );
+
+                            if (confirmed == true) {
+                              await ref
+                                  .read(priceHistoryProvider)
+                                  .addPriceHistory(
+                                    PriceHistory(
+                                      id: const Uuid().v4(),
+                                      productBarcode: searchBarcode,
+                                      storeId: currentStoreId,
+                                      price: storeHistory.price,
+                                      timestamp: now.millisecondsSinceEpoch,
+                                      promoType: storeHistory.promoType,
+                                      promoValidUntil:
+                                          storeHistory.promoValidUntil,
+                                      originalPrice: storeHistory.originalPrice,
+                                    ),
+                                  );
+                              finalBarcodeToAdd = searchBarcode;
+                              handled = true;
+                            } else if (confirmed == false) {
+                              // Leave handled = false to trigger AddProductScreen below
+                            } else {
+                              handled = true; // Dismissed
+                            }
                           } else {
-                            handled = true; // Dismissed
+                            handled = true;
                           }
                         } else {
+                          // Already checked today
+                          finalBarcodeToAdd = searchBarcode;
                           handled = true;
                         }
-                      } else {
-                        // Already checked today
-                        finalBarcodeToAdd = scannedCode;
-                        handled = true;
                       }
                     }
                   }
@@ -890,7 +984,11 @@ class _CurrentShoppingScreenState extends ConsumerState<CurrentShoppingScreen> {
                   final latestHistory =
                       storeHistory ??
                       (history.isNotEmpty ? history.first : null);
-                  double price = latestHistory?.price ?? 0.0;
+                  
+                  double price = (isFreshBarcode && freshPrice != null)
+                      ? freshPrice
+                      : (latestHistory?.price ?? 0.0);
+
                   CartItemStatus status = CartItemStatus.ok;
                   if (currentStoreId != null) {
                     if (storeHistory == null)
@@ -915,6 +1013,7 @@ class _CurrentShoppingScreenState extends ConsumerState<CurrentShoppingScreen> {
                     imageUrl: product?.imageUrl,
                     status: status,
                     quantity: qtyToAdd,
+                    originalPrice: latestHistory?.originalPrice,
                   );
 
                   ref.read(cartProvider.notifier).addItem(newItem);
