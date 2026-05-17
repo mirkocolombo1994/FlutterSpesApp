@@ -1719,9 +1719,28 @@ class _CurrentShoppingScreenState extends ConsumerState<CurrentShoppingScreen> {
       final storeHistory = currentStoreId != null
           ? history.where((h) => h.storeId == currentStoreId).firstOrNull
           : null;
-      final previousPrice = storeHistory?.price ?? 1.50; // Prezzo precedente o di fallback
 
       if (!mounted) return;
+
+      if (storeHistory == null) {
+        // Se il prodotto non è mai stato censito nel negozio attuale, chiede direttamente l'inserimento del prezzo
+        final result = await Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => AddProductScreen(
+              initialBarcode: product.barcode,
+              preselectedStoreId: currentStoreId,
+              isFastMode: true,
+            ),
+          ),
+        );
+        if (result != null && result is String) {
+          await _processScannedCode(result);
+        }
+        return;
+      }
+
+      final previousPrice = storeHistory.price;
 
       await showDialog(
         context: context,
