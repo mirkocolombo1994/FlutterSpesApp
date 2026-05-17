@@ -211,4 +211,32 @@ class AppStrings {
   static const String unknown = 'Sconosciuto';
   static const String loading = 'Caricamento...';
   static const String confirm = 'Conferma';
+
+  // AI and Superfast Mode Strings
+  static const String superfastModeLabel = 'Modalità Superfast';
+  static const String superfastModeDesc = 'Scannerizza, inserisci subito il prezzo e l\'app cercherà in background su OFF. Se non trovato, scatta una foto e l\'IA riconoscerà nome, marca e categoria.';
+  static const String geminiApiKeyLabel = 'Chiave API Gemini';
+  static const String geminiApiKeyDesc = 'Inserisci la tua chiave API Google Gemini per abilitare il riconoscimento visivo reale dei prodotti.';
+  static const String aiSectionTitle = 'Intelligenza Artificiale (IA)';
+  static const String aiAnalyzingImage = 'L\'IA sta analizzando la foto...';
+  static const String aiAnalysisSuccess = '✨ Riconoscimento completato con successo!';
+  static const String aiAnalysisFailed = 'Impossibile riconoscere il prodotto. Inserisci i dati manualmente.';
+  static const String aiConfirmTitle = 'Riconoscimento IA';
+  static const String aiConfirmSubtitle = 'Verifica i dati estratti dall\'intelligenza artificiale:';
+  static const String aiAutoAddedList = '🧠 Aggiunto automaticamente dall\'IA';
+  static const String dealExcellent = '🔥 Ottimo Affare!';
+  static const String dealGood = '👍 Buon Prezzo';
+  static const String dealExpensive = '⚠️ Prezzo Elevato';
+  static const String dealAverage = 'Prezzo nella Media';
+  static const String aiSuggestionsTitle = '🧠 Consigliati dall\'IA';
+  static const String aiSuggestionsSubtitle = 'Articoli che potresti dover riacquistare a breve';
+  static const String estimatedBudgetLabel = 'Stima Budget Predittivo:';
+  static const String superfastPricePrompt = 'Prezzo Prodotto Rilevato';
+  static const String offSearching = 'Ricerca in corso su Open Food Facts...';
+  static const String offFound = 'Prodotto trovato su OFF!';
+  static const String offNotFound = 'Prodotto non presente su OFF! Scatta una foto per riconoscerlo con l\'IA.';
+  static const String takeProductPhoto = 'Scatta Foto Prodotto';
+  static const String autopopulateListTitle = 'Suggerimenti IA Rilevati';
+  static const String autopopulateListMessage = 'L\'algoritmo IA stima che potresti aver terminato alcuni articoli abitudinali. Vuoi aggiungerli automaticamente alla lista?';
+  static const String autopopulateAddAll = 'Sì, Aggiungi Consigliati';
 }

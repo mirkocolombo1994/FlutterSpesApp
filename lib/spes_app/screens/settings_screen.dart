@@ -80,6 +80,26 @@ class SettingsScreen extends ConsumerWidget {
             onChanged: (val) => ref.read(settingsProvider.notifier).setEnableDataSaver(val),
           ),
           const Divider(),
+          _buildSectionHeader(AppStrings.aiSectionTitle),
+          SwitchListTile(
+            title: const Text(AppStrings.superfastModeLabel),
+            subtitle: const Text(AppStrings.superfastModeDesc),
+            secondary: const Icon(Icons.bolt, color: Colors.indigo),
+            value: settings.enableSuperfastMode,
+            onChanged: (val) => ref.read(settingsProvider.notifier).setEnableSuperfastMode(val),
+          ),
+          ListTile(
+            leading: const Icon(Icons.vpn_key, color: Colors.indigo),
+            title: const Text(AppStrings.geminiApiKeyLabel),
+            subtitle: Text(
+              settings.geminiApiKey.isEmpty
+                  ? AppStrings.geminiApiKeyDesc
+                  : 'Chiave salvata: ••••••••••••••••',
+            ),
+            trailing: const Icon(Icons.edit, color: Colors.indigo),
+            onTap: () => _showApiKeyDialog(context, ref, settings.geminiApiKey),
+          ),
+          const Divider(),
           _buildSectionHeader(AppStrings.aboutAppLabel),
           FutureBuilder<PackageInfo>(
             future: PackageInfo.fromPlatform(),
@@ -103,6 +123,58 @@ class SettingsScreen extends ConsumerWidget {
           ),
         ],
       ),
+    );
+  }
+
+  void _showApiKeyDialog(BuildContext context, WidgetRef ref, String currentKey) {
+    final controller = TextEditingController(text: currentKey);
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: const Row(
+            children: [
+              Icon(Icons.vpn_key, color: Colors.indigo),
+              SizedBox(width: 10),
+              Text(AppStrings.geminiApiKeyLabel),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'Per abilitare il riconoscimento dell\'immagine con l\'IA di Google Gemini, inserisci la tua chiave API (gratuita e privata).',
+                style: TextStyle(fontSize: 14),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: controller,
+                decoration: const InputDecoration(
+                  labelText: 'Chiave API Gemini',
+                  border: OutlineInputBorder(),
+                  hintText: 'AIzaSy...',
+                ),
+                obscureText: true,
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text(AppStrings.cancel),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                ref.read(settingsProvider.notifier).setGeminiApiKey(controller.text.trim());
+                Navigator.pop(context);
+              },
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.indigo, foregroundColor: Colors.white),
+              child: const Text(AppStrings.save),
+            ),
+          ],
+        );
+      },
     );
   }
 

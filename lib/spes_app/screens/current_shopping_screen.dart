@@ -18,6 +18,10 @@ import '../constants/app_strings.dart';
 import '../providers/settings_provider.dart';
 import '../services/promotion_engine.dart';
 import 'package:intl/intl.dart';
+import '../widgets/superfast_scan_dialog.dart';
+import '../widgets/ai_suggestions_carousel.dart';
+import '../services/prediction_engine.dart';
+
 
 class CurrentShoppingScreen extends ConsumerStatefulWidget {
   const CurrentShoppingScreen({super.key});
@@ -341,18 +345,84 @@ class _CurrentShoppingScreenState extends ConsumerState<CurrentShoppingScreen> {
           ),
         ),
         Expanded(
-          child: cartItems.isEmpty
-              ? const Center(
-                  child: Padding(
-                    padding: EdgeInsets.all(32.0),
-                    child: Text(
-                      AppStrings.emptyCart,
-                      textAlign: TextAlign.center,
-                      style: TextStyle(fontSize: 16, color: Colors.grey),
-                    ),
-                  ),
-                )
-              : ListView.builder(
+          child: Column(
+            children: [
+              if (cartItems.isNotEmpty)
+                AiSuggestionsCarousel(
+                  storeId: activeStoreId,
+                  onAdd: (product) async {
+                    final history = await ref
+                        .read(priceHistoryProvider)
+                        .getHistoryForProduct(product.barcode);
+                    final storeHistory = activeStoreId != null
+                        ? history.where((h) => h.storeId == activeStoreId).firstOrNull
+                        : null;
+                    final price = storeHistory?.price ?? 1.50;
+                    
+                    final newItem = CartItem(
+                      id: const Uuid().v4(),
+                      barcode: product.barcode,
+                      name: product.name,
+                      price: price,
+                      unitPrice: storeHistory?.unitPrice ?? product.pricePerKg,
+                      imageUrl: product.imageUrl,
+                      status: (activeStoreId != null && storeHistory == null)
+                          ? CartItemStatus.error
+                          : CartItemStatus.ok,
+                      quantity: 1,
+                    );
+                    ref.read(cartProvider.notifier).addItem(newItem);
+                  },
+                ),
+              Expanded(
+                child: cartItems.isEmpty
+                    ? SingleChildScrollView(
+                        child: Column(
+                          children: [
+                            const Padding(
+                              padding: EdgeInsets.symmetric(
+                                horizontal: 32.0,
+                                vertical: 48.0,
+                              ),
+                              child: Text(
+                                AppStrings.emptyCart,
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  color: Colors.grey,
+                                ),
+                              ),
+                            ),
+                            AiSuggestionsCarousel(
+                              storeId: activeStoreId,
+                              onAdd: (product) async {
+                                final history = await ref
+                                    .read(priceHistoryProvider)
+                                    .getHistoryForProduct(product.barcode);
+                                final storeHistory = activeStoreId != null
+                                    ? history.where((h) => h.storeId == activeStoreId).firstOrNull
+                                    : null;
+                                final price = storeHistory?.price ?? 1.50;
+                                
+                                final newItem = CartItem(
+                                  id: const Uuid().v4(),
+                                  barcode: product.barcode,
+                                  name: product.name,
+                                  price: price,
+                                  unitPrice: storeHistory?.unitPrice ?? product.pricePerKg,
+                                  imageUrl: product.imageUrl,
+                                  status: (activeStoreId != null && storeHistory == null)
+                                      ? CartItemStatus.error
+                                      : CartItemStatus.ok,
+                                  quantity: 1,
+                                );
+                                ref.read(cartProvider.notifier).addItem(newItem);
+                              },
+                            ),
+                          ],
+                        ),
+                      )
+                    : ListView.builder(
                   controller: _scrollController,
                   itemCount: cartItems.length,
                   itemBuilder: (context, index) {
@@ -481,6 +551,69 @@ class _CurrentShoppingScreenState extends ConsumerState<CurrentShoppingScreen> {
                                 fontStyle: FontStyle.italic,
                               ),
                             ),
+                          FutureBuilder<String>(
+                            future: PredictionEngine.instance.evaluatePriceDeal(
+                              item.barcode,
+                              activeStoreId ?? '',
+                              item.price,
+                            ),
+                            builder: (context, snapshot) {
+                              if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                                return const SizedBox.shrink();
+                              }
+                              final deal = snapshot.data!;
+                              String text;
+                              Color color;
+                              IconData icon;
+
+                              if (deal == 'excellent') {
+                                text = AppStrings.dealExcellent;
+                                color = Colors.redAccent.shade700;
+                                icon = Icons.whatshot;
+                              } else if (deal == 'good') {
+                                text = AppStrings.dealGood;
+                                color = Colors.green.shade700;
+                                icon = Icons.thumb_up;
+                              } else if (deal == 'expensive') {
+                                text = AppStrings.dealExpensive;
+                                color = Colors.amber.shade900;
+                                icon = Icons.warning;
+                              } else {
+                                return const SizedBox.shrink();
+                              }
+
+                              return Container(
+                                margin: const EdgeInsets.only(top: 4),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 6,
+                                  vertical: 2,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: color.withOpacity(0.1),
+                                  borderRadius: BorderRadius.circular(6),
+                                  border: Border.all(
+                                    color: color.withOpacity(0.3),
+                                    width: 1,
+                                  ),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(icon, size: 10, color: color),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      text,
+                                      style: TextStyle(
+                                        fontSize: 9,
+                                        fontWeight: FontWeight.bold,
+                                        color: color,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            },
+                          ),
                         ],
                       ),
                       trailing: (() {
@@ -589,6 +722,9 @@ class _CurrentShoppingScreenState extends ConsumerState<CurrentShoppingScreen> {
                     );
                   },
                 ),
+              ),
+            ],
+          ),
         ),
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
@@ -645,9 +781,10 @@ class _CurrentShoppingScreenState extends ConsumerState<CurrentShoppingScreen> {
                 );
                 final storeId = await gpsFuture;
                 if (mounted) Navigator.pop(context);
-                if (storeId != null &&
+                final currentStoreId = ref.read(activeStoreIdProvider) ?? storeId;
+                if (currentStoreId != null &&
                     ref.read(activeStoreIdProvider) == null) {
-                  ref.read(activeStoreIdProvider.notifier).setId(storeId);
+                  ref.read(activeStoreIdProvider.notifier).setId(currentStoreId);
                 }
                 
                 final isFreshBarcode = scannedCode.length == 13 && scannedCode.startsWith('2');
@@ -661,6 +798,84 @@ class _CurrentShoppingScreenState extends ConsumerState<CurrentShoppingScreen> {
                     freshPrice = parsedPrice / 100.0;
                   }
                 }
+
+                // [SUPERFAST MODE BYPASS CHECK AND FLOW]
+                if (settings.enableSuperfastMode) {
+                  final products = ref.read(productProvider);
+                  final existingProduct = products
+                      .where((p) => p.barcode == searchBarcode)
+                      .firstOrNull;
+
+                  if (existingProduct != null && currentStoreId != null) {
+                    final history = await ref
+                        .read(priceHistoryProvider)
+                        .getHistoryForProduct(searchBarcode);
+                    final storeHistoryToday = history.where((h) {
+                      if (h.storeId != currentStoreId) return false;
+                      final historyDate = DateTime.fromMillisecondsSinceEpoch(h.timestamp);
+                      final now = DateTime.now();
+                      return historyDate.year == now.year &&
+                             historyDate.month == now.month &&
+                             historyDate.day == now.day;
+                    }).firstOrNull;
+
+                    if (storeHistoryToday != null) {
+                      // Bypass! Prodotto acquistato oggi in questo store -> Aggiungi direttamente con lo stesso prezzo
+                      double finalPrice = isFreshBarcode ? (freshPrice ?? storeHistoryToday.price) : storeHistoryToday.price;
+                      final newItem = CartItem(
+                        id: const Uuid().v4(),
+                        barcode: searchBarcode,
+                        name: existingProduct.name,
+                        price: finalPrice,
+                        unitPrice: storeHistoryToday.unitPrice ?? existingProduct.pricePerKg,
+                        promoType: storeHistoryToday.promoType,
+                        imageUrl: existingProduct.imageUrl,
+                        status: CartItemStatus.ok,
+                        quantity: 1,
+                        originalPrice: storeHistoryToday.originalPrice,
+                      );
+                      ref.read(cartProvider.notifier).addItem(newItem);
+
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Row(
+                              children: [
+                                const Icon(Icons.bolt, color: Colors.amber),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    'Superfast (Già registrato oggi): ${existingProduct.name}',
+                                  ),
+                                ),
+                              ],
+                            ),
+                            backgroundColor: Colors.indigo,
+                            duration: const Duration(seconds: 2),
+                          ),
+                        );
+                      }
+                      return; // Bypass riuscito
+                    }
+                  }
+
+                  // Altrimenti avvia la procedura superveloce con l'IA
+                  if (mounted) {
+                    await showDialog(
+                      context: context,
+                      barrierDismissible: false,
+                      builder: (context) => SuperFastScanDialog(
+                        scannedBarcode: scannedCode,
+                        storeId: currentStoreId ?? 'default_store',
+                        onCompleted: () {
+                          ref.read(productProvider.notifier).loadProducts();
+                        },
+                      ),
+                    );
+                  }
+                  return; // Fine flusso superfast
+                }
+
 
                 final products = ref.read(productProvider);
                 final existingProduct = products
