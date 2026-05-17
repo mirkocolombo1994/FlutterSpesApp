@@ -1,10 +1,12 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/product.dart';
 import '../services/prediction_engine.dart';
 import '../constants/app_strings.dart';
+import '../providers/cart_provider.dart';
 
-class AiSuggestionsCarousel extends StatefulWidget {
+class AiSuggestionsCarousel extends ConsumerStatefulWidget {
   final Function(Product) onAdd;
   final String? storeId;
 
@@ -15,10 +17,10 @@ class AiSuggestionsCarousel extends StatefulWidget {
   });
 
   @override
-  State<AiSuggestionsCarousel> createState() => _AiSuggestionsCarouselState();
+  ConsumerState<AiSuggestionsCarousel> createState() => _AiSuggestionsCarouselState();
 }
 
-class _AiSuggestionsCarouselState extends State<AiSuggestionsCarousel> {
+class _AiSuggestionsCarouselState extends ConsumerState<AiSuggestionsCarousel> {
   late Future<List<Product>> _suggestionsFuture;
 
   @override
@@ -35,6 +37,9 @@ class _AiSuggestionsCarouselState extends State<AiSuggestionsCarousel> {
 
   @override
   Widget build(BuildContext context) {
+    final cart = ref.watch(cartProvider);
+    final cartBarcodes = cart.map((item) => item.barcode).toSet();
+
     return FutureBuilder<List<Product>>(
       future: _suggestionsFuture,
       builder: (context, snapshot) {
@@ -49,7 +54,22 @@ class _AiSuggestionsCarouselState extends State<AiSuggestionsCarousel> {
           return const SizedBox.shrink(); // Nessun suggerimento da mostrare
         }
 
-        final suggestions = snapshot.data!;
+        final allSuggestions = snapshot.data!;
+        final suggestions = allSuggestions.where((product) {
+          final isFresh = product.barcode.length == 7 && product.barcode.startsWith('2');
+          final barcodeToCompare = isFresh ? product.barcode : product.barcode;
+          
+          return !cartBarcodes.any((cartBc) {
+            final cartSearchBc = cartBc.length == 13 && cartBc.startsWith('2') 
+                ? cartBc.substring(0, 7) 
+                : cartBc;
+            return cartSearchBc == barcodeToCompare;
+          });
+        }).toList();
+
+        if (suggestions.isEmpty) {
+          return const SizedBox.shrink();
+        }
 
         return Container(
           margin: const EdgeInsets.symmetric(vertical: 12.0, horizontal: 16.0),
@@ -250,15 +270,6 @@ class _AiSuggestionsCarouselState extends State<AiSuggestionsCarousel> {
                   borderRadius: BorderRadius.circular(10),
                   onTap: () {
                     widget.onAdd(product);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('${AppStrings.addedSuccess} ${product.name}'),
-                        duration: const Duration(seconds: 1),
-                        behavior: SnackBarBehavior.floating,
-                        backgroundColor: Colors.indigo,
-                      ),
-                    );
-                    _refreshSuggestions(); // Ricarica lo stato
                   },
                   child: const Padding(
                     padding: EdgeInsets.all(6.0),

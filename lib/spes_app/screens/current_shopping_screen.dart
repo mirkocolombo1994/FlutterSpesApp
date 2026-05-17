@@ -350,29 +350,7 @@ class _CurrentShoppingScreenState extends ConsumerState<CurrentShoppingScreen> {
               if (cartItems.isNotEmpty)
                 AiSuggestionsCarousel(
                   storeId: activeStoreId,
-                  onAdd: (product) async {
-                    final history = await ref
-                        .read(priceHistoryProvider)
-                        .getHistoryForProduct(product.barcode);
-                    final storeHistory = activeStoreId != null
-                        ? history.where((h) => h.storeId == activeStoreId).firstOrNull
-                        : null;
-                    final price = storeHistory?.price ?? 1.50;
-                    
-                    final newItem = CartItem(
-                      id: const Uuid().v4(),
-                      barcode: product.barcode,
-                      name: product.name,
-                      price: price,
-                      unitPrice: storeHistory?.unitPrice ?? product.pricePerKg,
-                      imageUrl: product.imageUrl,
-                      status: (activeStoreId != null && storeHistory == null)
-                          ? CartItemStatus.error
-                          : CartItemStatus.ok,
-                      quantity: 1,
-                    );
-                    ref.read(cartProvider.notifier).addItem(newItem);
-                  },
+                  onAdd: (product) => _promptToScanSuggestedProduct(product),
                 ),
               Expanded(
                 child: cartItems.isEmpty
@@ -395,29 +373,7 @@ class _CurrentShoppingScreenState extends ConsumerState<CurrentShoppingScreen> {
                             ),
                             AiSuggestionsCarousel(
                               storeId: activeStoreId,
-                              onAdd: (product) async {
-                                final history = await ref
-                                    .read(priceHistoryProvider)
-                                    .getHistoryForProduct(product.barcode);
-                                final storeHistory = activeStoreId != null
-                                    ? history.where((h) => h.storeId == activeStoreId).firstOrNull
-                                    : null;
-                                final price = storeHistory?.price ?? 1.50;
-                                
-                                final newItem = CartItem(
-                                  id: const Uuid().v4(),
-                                  barcode: product.barcode,
-                                  name: product.name,
-                                  price: price,
-                                  unitPrice: storeHistory?.unitPrice ?? product.pricePerKg,
-                                  imageUrl: product.imageUrl,
-                                  status: (activeStoreId != null && storeHistory == null)
-                                      ? CartItemStatus.error
-                                      : CartItemStatus.ok,
-                                  quantity: 1,
-                                );
-                                ref.read(cartProvider.notifier).addItem(newItem);
-                              },
+                              onAdd: (product) => _promptToScanSuggestedProduct(product),
                             ),
                           ],
                         ),
@@ -765,7 +721,6 @@ class _CurrentShoppingScreenState extends ConsumerState<CurrentShoppingScreen> {
             foregroundColor: Colors.white,
             elevation: 6,
             onPressed: () async {
-              final gpsFuture = _fetchGpsAndStore(ref);
               final String? scannedCode = await Navigator.push(
                 context,
                 MaterialPageRoute(
@@ -773,469 +728,7 @@ class _CurrentShoppingScreenState extends ConsumerState<CurrentShoppingScreen> {
                 ),
               );
               if (scannedCode != null) {
-                showDialog(
-                  context: context,
-                  barrierDismissible: false,
-                  builder: (_) =>
-                      const Center(child: CircularProgressIndicator()),
-                );
-                final storeId = await gpsFuture;
-                if (mounted) Navigator.pop(context);
-                final currentStoreId = ref.read(activeStoreIdProvider) ?? storeId;
-                if (currentStoreId != null &&
-                    ref.read(activeStoreIdProvider) == null) {
-                  ref.read(activeStoreIdProvider.notifier).setId(currentStoreId);
-                }
-                
-                final isFreshBarcode = scannedCode.length == 13 && scannedCode.startsWith('2');
-                final searchBarcode = isFreshBarcode ? scannedCode.substring(0, 7) : scannedCode;
-                
-                double? freshPrice;
-                if (isFreshBarcode) {
-                  final priceDigits = scannedCode.substring(7, 12);
-                  final parsedPrice = double.tryParse(priceDigits);
-                  if (parsedPrice != null && parsedPrice > 0) {
-                    freshPrice = parsedPrice / 100.0;
-                  }
-                }
-
-                // [SUPERFAST MODE BYPASS CHECK AND FLOW]
-                if (settings.enableSuperfastMode) {
-                  final products = ref.read(productProvider);
-                  final existingProduct = products
-                      .where((p) => p.barcode == searchBarcode)
-                      .firstOrNull;
-
-                  if (existingProduct != null && currentStoreId != null) {
-                    final history = await ref
-                        .read(priceHistoryProvider)
-                        .getHistoryForProduct(searchBarcode);
-                    final storeHistoryToday = history.where((h) {
-                      if (h.storeId != currentStoreId) return false;
-                      final historyDate = DateTime.fromMillisecondsSinceEpoch(h.timestamp);
-                      final now = DateTime.now();
-                      return historyDate.year == now.year &&
-                             historyDate.month == now.month &&
-                             historyDate.day == now.day;
-                    }).firstOrNull;
-
-                    if (storeHistoryToday != null) {
-                      // Bypass! Prodotto acquistato oggi in questo store -> Aggiungi direttamente con lo stesso prezzo
-                      double finalPrice = isFreshBarcode ? (freshPrice ?? storeHistoryToday.price) : storeHistoryToday.price;
-                      final newItem = CartItem(
-                        id: const Uuid().v4(),
-                        barcode: searchBarcode,
-                        name: existingProduct.name,
-                        price: finalPrice,
-                        unitPrice: storeHistoryToday.unitPrice ?? existingProduct.pricePerKg,
-                        promoType: storeHistoryToday.promoType,
-                        imageUrl: existingProduct.imageUrl,
-                        status: CartItemStatus.ok,
-                        quantity: 1,
-                        originalPrice: storeHistoryToday.originalPrice,
-                      );
-                      ref.read(cartProvider.notifier).addItem(newItem);
-
-                      if (mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Row(
-                              children: [
-                                const Icon(Icons.bolt, color: Colors.amber),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  child: Text(
-                                    'Superfast (Già registrato oggi): ${existingProduct.name}',
-                                  ),
-                                ),
-                              ],
-                            ),
-                            backgroundColor: Colors.indigo,
-                            duration: const Duration(seconds: 2),
-                          ),
-                        );
-                      }
-                      return; // Bypass riuscito
-                    }
-                  }
-
-                  // Altrimenti avvia la procedura superveloce con l'IA
-                  if (mounted) {
-                    await showDialog(
-                      context: context,
-                      barrierDismissible: false,
-                      builder: (context) => SuperFastScanDialog(
-                        scannedBarcode: scannedCode,
-                        storeId: currentStoreId ?? 'default_store',
-                        onCompleted: () {
-                          ref.read(productProvider.notifier).loadProducts();
-                        },
-                      ),
-                    );
-                  }
-                  return; // Fine flusso superfast
-                }
-
-
-                final products = ref.read(productProvider);
-                final existingProduct = products
-                    .where((p) => p.barcode == searchBarcode)
-                    .firstOrNull;
-                String? finalBarcodeToAdd;
-                bool handled = false;
-
-                if (existingProduct != null) {
-                  final currentStoreId = ref.read(activeStoreIdProvider);
-
-                  if (currentStoreId != null) {
-                    final history = await ref
-                        .read(priceHistoryProvider)
-                        .getHistoryForProduct(searchBarcode);
-                    final storeHistory = history
-                        .where((h) => h.storeId == currentStoreId)
-                        .firstOrNull;
-
-                    if (storeHistory != null) {
-                      final historyDate = DateTime.fromMillisecondsSinceEpoch(
-                        storeHistory.timestamp,
-                      );
-                      final now = DateTime.now();
-                      
-                      if (isFreshBarcode) {
-                        // Prodotti freschi censiti bypassano la dialog di validazione
-                        // e registrano sempre il prezzo dal codice a barre
-                        final finalPrice = freshPrice ?? storeHistory.price;
-                        await ref
-                            .read(priceHistoryProvider)
-                            .addPriceHistory(
-                              PriceHistory(
-                                id: const Uuid().v4(),
-                                productBarcode: searchBarcode,
-                                storeId: currentStoreId,
-                                price: finalPrice,
-                                timestamp: now.millisecondsSinceEpoch,
-                                promoType: storeHistory.promoType,
-                                promoValidUntil: storeHistory.promoValidUntil,
-                                originalPrice: storeHistory.originalPrice,
-                              ),
-                            );
-                        finalBarcodeToAdd = searchBarcode;
-                        handled = true;
-                      } else {
-                        bool isSameDay =
-                            historyDate.year == now.year &&
-                            historyDate.month == now.month &&
-                            historyDate.day == now.day;
-
-                        if (!isSameDay) {
-                          if (mounted) {
-                            final bool? confirmed = await showDialog<bool>(
-                              context: context,
-                              builder: (context) {
-                                final historyDate =
-                                    DateTime.fromMillisecondsSinceEpoch(
-                                      storeHistory.timestamp,
-                                    );
-                                final dateStr = DateFormat(
-                                  'dd/MM/yyyy HH:mm',
-                                ).format(historyDate);
-
-                                return AlertDialog(
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(20),
-                                  ),
-                                  title: Row(
-                                    children: [
-                                      const Icon(
-                                        Icons.history,
-                                        color: Colors.indigo,
-                                      ),
-                                      const SizedBox(width: 10),
-                                      const Text(
-                                        AppStrings.priceValidationTitle,
-                                        style: TextStyle(
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                  content: Column(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      const Text(
-                                        AppStrings.lastPrice,
-                                        style: TextStyle(
-                                          fontSize: 14,
-                                          color: Colors.grey,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 8),
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 20,
-                                          vertical: 12,
-                                        ),
-                                        decoration: BoxDecoration(
-                                          color: Colors.indigo.shade50,
-                                          borderRadius: BorderRadius.circular(12),
-                                          border: Border.all(
-                                            color: Colors.indigo.shade100,
-                                          ),
-                                        ),
-                                        child: Text(
-                                          '€ ${storeHistory.price.toStringAsFixed(2)}',
-                                          style: const TextStyle(
-                                            fontSize: 32,
-                                            fontWeight: FontWeight.bold,
-                                            color: Colors.indigo,
-                                          ),
-                                        ),
-                                      ),
-                                      if (storeHistory.promoType != null) ...[
-                                        const SizedBox(height: 12),
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(
-                                            horizontal: 12,
-                                            vertical: 6,
-                                          ),
-                                          decoration: BoxDecoration(
-                                            color: Colors.orange.shade50,
-                                            borderRadius: BorderRadius.circular(8),
-                                            border: Border.all(
-                                              color: Colors.orange.shade200,
-                                            ),
-                                          ),
-                                          child: Row(
-                                            mainAxisSize: MainAxisSize.min,
-                                            children: [
-                                              const Icon(
-                                                Icons.local_offer,
-                                                color: Colors.orange,
-                                                size: 16,
-                                              ),
-                                              const SizedBox(width: 6),
-                                              Flexible(
-                                                child: Text(
-                                                  'Promo: ${storeHistory.promoType}',
-                                                  style: const TextStyle(
-                                                    color: Colors.orange,
-                                                    fontWeight: FontWeight.bold,
-                                                    fontSize: 13,
-                                                  ),
-                                                  overflow: TextOverflow.ellipsis,
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                      ],
-                                      const SizedBox(height: 8),
-                                      Text(
-                                        'Rilevato il: $dateStr',
-                                        style: TextStyle(
-                                          fontSize: 12,
-                                          fontStyle: FontStyle.italic,
-                                          color: Colors.grey.shade600,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 24),
-                                      Text(
-                                        storeHistory.promoType != null
-                                            ? "Il prezzo è rimasto lo stesso ed è ancora attiva la promozione?"
-                                            : AppStrings.priceValidationQuestion
-                                                    .replaceAll('?', '')
-                                                    .trim() +
-                                                '?',
-                                        textAlign: TextAlign.center,
-                                        style: const TextStyle(
-                                          fontSize: 16,
-                                          fontWeight: FontWeight.w500,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                  actionsPadding: const EdgeInsets.symmetric(
-                                    horizontal: 16,
-                                    vertical: 12,
-                                  ),
-                                  actions: [
-                                    TextButton(
-                                      style: TextButton.styleFrom(
-                                        foregroundColor: Colors.red,
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 12,
-                                          vertical: 8,
-                                        ),
-                                      ),
-                                      onPressed: () =>
-                                          Navigator.pop(context, false),
-                                      child: const Text(
-                                        AppStrings.priceChanged,
-                                        style: TextStyle(
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
-                                    ),
-                                    ElevatedButton(
-                                      style: ElevatedButton.styleFrom(
-                                        backgroundColor: Colors.green,
-                                        foregroundColor: Colors.white,
-                                        elevation: 2,
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 20,
-                                          vertical: 8,
-                                        ),
-                                        shape: RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.circular(10),
-                                        ),
-                                      ),
-                                      onPressed: () =>
-                                          Navigator.pop(context, true),
-                                      child: const Text(
-                                        AppStrings.priceConfirmed,
-                                        style: TextStyle(
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                );
-                              },
-                            );
-
-                            if (confirmed == true) {
-                              await ref
-                                  .read(priceHistoryProvider)
-                                  .addPriceHistory(
-                                    PriceHistory(
-                                      id: const Uuid().v4(),
-                                      productBarcode: searchBarcode,
-                                      storeId: currentStoreId,
-                                      price: storeHistory.price,
-                                      timestamp: now.millisecondsSinceEpoch,
-                                      promoType: storeHistory.promoType,
-                                      promoValidUntil:
-                                          storeHistory.promoValidUntil,
-                                      originalPrice: storeHistory.originalPrice,
-                                    ),
-                                  );
-                              finalBarcodeToAdd = searchBarcode;
-                              handled = true;
-                            } else if (confirmed == false) {
-                              // Leave handled = false to trigger AddProductScreen below
-                            } else {
-                              handled = true; // Dismissed
-                            }
-                          } else {
-                            handled = true;
-                          }
-                        } else {
-                          // Already checked today
-                          finalBarcodeToAdd = searchBarcode;
-                          handled = true;
-                        }
-                      }
-                    }
-                  }
-
-                  if (!handled) {
-                    if (mounted) {
-                      final result = await Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => AddProductScreen(
-                            initialBarcode: scannedCode,
-                            preselectedStoreId: currentStoreId,
-                            isFastMode: true,
-                          ),
-                        ),
-                      );
-                      if (result != null && result is String) {
-                        finalBarcodeToAdd = result;
-                      }
-                    }
-                  }
-
-                  if (finalBarcodeToAdd != null && mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(
-                          '${AppStrings.addedSuccess} ${existingProduct.name}',
-                        ),
-                        backgroundColor: Colors.green,
-                        duration: const Duration(seconds: 2),
-                      ),
-                    );
-                  }
-                } else {
-                  final result = await Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => AddProductScreen(
-                        initialBarcode: scannedCode,
-                        preselectedStoreId: ref.read(activeStoreIdProvider),
-                        isFastMode: true,
-                      ),
-                    ),
-                  );
-                  if (result != null && result is String) {
-                    finalBarcodeToAdd = result;
-                  }
-                }
-                if (finalBarcodeToAdd != null) {
-                  final productList = ref.read(productProvider);
-                  final product = productList
-                      .where((p) => p.barcode == finalBarcodeToAdd)
-                      .firstOrNull;
-                  final currentStoreId = ref.read(activeStoreIdProvider);
-                  final history = await ref
-                      .read(priceHistoryProvider)
-                      .getHistoryForProduct(finalBarcodeToAdd);
-                  final storeHistory = currentStoreId != null
-                      ? history
-                            .where((h) => h.storeId == currentStoreId)
-                            .firstOrNull
-                      : null;
-                  final latestHistory =
-                      storeHistory ??
-                      (history.isNotEmpty ? history.first : null);
-                  
-                  double price = (isFreshBarcode && freshPrice != null)
-                      ? freshPrice
-                      : (latestHistory?.price ?? 0.0);
-
-                  CartItemStatus status = CartItemStatus.ok;
-                  if (currentStoreId != null) {
-                    if (storeHistory == null)
-                      status = CartItemStatus.error;
-                    else if (price <= 0)
-                      status = CartItemStatus.warning;
-                  }
-                  int qtyToAdd = 1;
-                  if (handled && settings.requireCartConfirmation && mounted) {
-                    final qty = await _askQuantity(context);
-                    if (qty == null) return;
-                    qtyToAdd = qty;
-                  }
-
-                  final newItem = CartItem(
-                    id: const Uuid().v4(),
-                    barcode: finalBarcodeToAdd,
-                    name: product?.name ?? AppStrings.unknownProduct,
-                    price: price,
-                    unitPrice: latestHistory?.unitPrice ?? product?.pricePerKg,
-                    promoType: latestHistory?.promoType,
-                    imageUrl: product?.imageUrl,
-                    status: status,
-                    quantity: qtyToAdd,
-                    originalPrice: latestHistory?.originalPrice,
-                  );
-
-                  ref.read(cartProvider.notifier).addItem(newItem);
-
-                  // [MODIFICA] Rimosso l'attivazione automatica al primo scan per evitare di interrompere l'utente.
-                  // Il dialogo apparirà ora solo premendo il tasto '+' nel carrello.
-                }
+                await _processScannedCode(scannedCode);
               }
             },
           ),
@@ -1616,6 +1109,600 @@ class _CurrentShoppingScreenState extends ConsumerState<CurrentShoppingScreen> {
           },
         );
       },
+    );
+  }
+
+  Future<void> _processScannedCode(String scannedCode) async {
+    final settings = ref.read(settingsProvider);
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) =>
+          const Center(child: CircularProgressIndicator()),
+    );
+    final gpsFuture = _fetchGpsAndStore(ref);
+    final storeId = await gpsFuture;
+    if (mounted) Navigator.pop(context);
+    final currentStoreId = ref.read(activeStoreIdProvider) ?? storeId;
+    if (currentStoreId != null &&
+        ref.read(activeStoreIdProvider) == null) {
+      ref.read(activeStoreIdProvider.notifier).setId(currentStoreId);
+    }
+    
+    final isFreshBarcode = scannedCode.length == 13 && scannedCode.startsWith('2');
+    final searchBarcode = isFreshBarcode ? scannedCode.substring(0, 7) : scannedCode;
+    
+    double? freshPrice;
+    if (isFreshBarcode) {
+      final priceDigits = scannedCode.substring(7, 12);
+      final parsedPrice = double.tryParse(priceDigits);
+      if (parsedPrice != null && parsedPrice > 0) {
+        freshPrice = parsedPrice / 100.0;
+      }
+    }
+
+    // [SUPERFAST MODE BYPASS CHECK AND FLOW]
+    if (settings.enableSuperfastMode) {
+      final products = ref.read(productProvider);
+      final existingProduct = products
+          .where((p) => p.barcode == searchBarcode)
+          .firstOrNull;
+
+      if (existingProduct != null && currentStoreId != null) {
+        final history = await ref
+            .read(priceHistoryProvider)
+            .getHistoryForProduct(searchBarcode);
+        final storeHistoryToday = history.where((h) {
+          if (h.storeId != currentStoreId) return false;
+          final historyDate = DateTime.fromMillisecondsSinceEpoch(h.timestamp);
+          final now = DateTime.now();
+          return historyDate.year == now.year &&
+                 historyDate.month == now.month &&
+                 historyDate.day == now.day;
+        }).firstOrNull;
+
+        if (storeHistoryToday != null) {
+          // Bypass! Prodotto acquistato oggi in questo store -> Aggiungi direttamente con lo stesso prezzo
+          double finalPrice = isFreshBarcode ? (freshPrice ?? storeHistoryToday.price) : storeHistoryToday.price;
+          final newItem = CartItem(
+            id: const Uuid().v4(),
+            barcode: searchBarcode,
+            name: existingProduct.name,
+            price: finalPrice,
+            unitPrice: storeHistoryToday.unitPrice ?? existingProduct.pricePerKg,
+            promoType: storeHistoryToday.promoType,
+            imageUrl: existingProduct.imageUrl,
+            status: CartItemStatus.ok,
+            quantity: 1,
+            originalPrice: storeHistoryToday.originalPrice,
+          );
+          ref.read(cartProvider.notifier).addItem(newItem);
+
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Row(
+                  children: [
+                    const Icon(Icons.bolt, color: Colors.amber),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Superfast (Già registrato oggi): ${existingProduct.name}',
+                      ),
+                    ),
+                  ],
+                ),
+                backgroundColor: Colors.indigo,
+                duration: const Duration(seconds: 2),
+              ),
+            );
+          }
+          return; // Bypass riuscito
+        }
+      }
+
+      // Altrimenti avvia la procedura superveloce con l'IA
+      if (mounted) {
+        await showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) => SuperFastScanDialog(
+            scannedBarcode: scannedCode,
+            storeId: currentStoreId ?? 'default_store',
+            onCompleted: () {
+              ref.read(productProvider.notifier).loadProducts();
+            },
+          ),
+        );
+      }
+      return; // Fine flusso superfast
+    }
+
+
+    final products = ref.read(productProvider);
+    final existingProduct = products
+        .where((p) => p.barcode == searchBarcode)
+        .firstOrNull;
+    String? finalBarcodeToAdd;
+    bool handled = false;
+
+    if (existingProduct != null) {
+      final currentStoreId = ref.read(activeStoreIdProvider);
+
+      if (currentStoreId != null) {
+        final history = await ref
+            .read(priceHistoryProvider)
+            .getHistoryForProduct(searchBarcode);
+        final storeHistory = history
+            .where((h) => h.storeId == currentStoreId)
+            .firstOrNull;
+
+        if (storeHistory != null) {
+          final historyDate = DateTime.fromMillisecondsSinceEpoch(
+            storeHistory.timestamp,
+          );
+          final now = DateTime.now();
+          
+          if (isFreshBarcode) {
+            // Prodotti freschi censiti bypassano la dialog di validazione
+            // e registrano sempre il prezzo dal codice a barre
+            final finalPrice = freshPrice ?? storeHistory.price;
+            await ref
+                .read(priceHistoryProvider)
+                .addPriceHistory(
+                  PriceHistory(
+                    id: const Uuid().v4(),
+                    productBarcode: searchBarcode,
+                    storeId: currentStoreId,
+                    price: finalPrice,
+                    timestamp: now.millisecondsSinceEpoch,
+                    promoType: storeHistory.promoType,
+                    promoValidUntil: storeHistory.promoValidUntil,
+                    originalPrice: storeHistory.originalPrice,
+                  ),
+                );
+            finalBarcodeToAdd = searchBarcode;
+            handled = true;
+          } else {
+            bool isSameDay =
+                historyDate.year == now.year &&
+                historyDate.month == now.month &&
+                historyDate.day == now.day;
+
+            if (!isSameDay) {
+              if (mounted) {
+                final bool? confirmed = await showDialog<bool>(
+                  context: context,
+                  builder: (context) {
+                    final historyDate =
+                        DateTime.fromMillisecondsSinceEpoch(
+                          storeHistory.timestamp,
+                        );
+                    final dateStr = DateFormat(
+                      'dd/MM/yyyy HH:mm',
+                    ).format(historyDate);
+
+                    return AlertDialog(
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      title: Row(
+                        children: [
+                          const Icon(
+                            Icons.history,
+                            color: Colors.indigo,
+                          ),
+                          const SizedBox(width: 10),
+                          const Text(
+                            AppStrings.priceValidationTitle,
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
+                      content: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Text(
+                            AppStrings.lastPrice,
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: Colors.grey,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 20,
+                              vertical: 12,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.indigo.shade50,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: Colors.indigo.shade100,
+                              ),
+                            ),
+                            child: Text(
+                              '€ ${storeHistory.price.toStringAsFixed(2)}',
+                              style: const TextStyle(
+                                fontSize: 32,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.indigo,
+                              ),
+                            ),
+                          ),
+                          if (storeHistory.promoType != null) ...[
+                            const SizedBox(height: 12),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 6,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.orange.shade50,
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(
+                                  color: Colors.orange.shade200,
+                                ),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Icon(
+                                    Icons.local_offer,
+                                    color: Colors.orange,
+                                    size: 16,
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Flexible(
+                                    child: Text(
+                                      'Promo: ${storeHistory.promoType}',
+                                      style: const TextStyle(
+                                        color: Colors.orange,
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 13,
+                                      ),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                          const SizedBox(height: 8),
+                          Text(
+                            'Rilevato il: $dateStr',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontStyle: FontStyle.italic,
+                              color: Colors.grey.shade600,
+                            ),
+                          ),
+                          const SizedBox(height: 24),
+                          Text(
+                            storeHistory.promoType != null
+                                ? "Il prezzo è rimasto lo stesso ed è ancora attiva la promozione?"
+                                : AppStrings.priceValidationQuestion
+                                        .replaceAll('?', '')
+                                        .trim() +
+                                    '?',
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                      ),
+                      actionsPadding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 12,
+                      ),
+                      actions: [
+                        TextButton(
+                          style: TextButton.styleFrom(
+                            foregroundColor: Colors.red,
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 8,
+                            ),
+                          ),
+                          onPressed: () =>
+                              Navigator.pop(context, false),
+                          child: const Text(
+                            AppStrings.priceChanged,
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                        ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.green,
+                            foregroundColor: Colors.white,
+                            elevation: 2,
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 20,
+                              vertical: 8,
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                          ),
+                          onPressed: () =>
+                              Navigator.pop(context, true),
+                          child: const Text(
+                            AppStrings.priceConfirmed,
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ],
+                    );
+                  },
+                );
+
+                if (confirmed == true) {
+                  await ref
+                      .read(priceHistoryProvider)
+                      .addPriceHistory(
+                        PriceHistory(
+                          id: const Uuid().v4(),
+                          productBarcode: searchBarcode,
+                          storeId: currentStoreId,
+                          price: storeHistory.price,
+                          timestamp: now.millisecondsSinceEpoch,
+                          promoType: storeHistory.promoType,
+                          promoValidUntil:
+                              storeHistory.promoValidUntil,
+                          originalPrice: storeHistory.originalPrice,
+                        ),
+                      );
+                  finalBarcodeToAdd = searchBarcode;
+                  handled = true;
+                } else if (confirmed == false) {
+                  // Leave handled = false to trigger AddProductScreen below
+                } else {
+                  handled = true; // Dismissed
+                }
+              } else {
+                handled = true;
+              }
+            } else {
+              // Already checked today
+              finalBarcodeToAdd = searchBarcode;
+              handled = true;
+            }
+          }
+        }
+      }
+    }
+
+    if (!handled) {
+      if (mounted) {
+        final result = await Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => AddProductScreen(
+              initialBarcode: scannedCode,
+              preselectedStoreId: currentStoreId,
+              isFastMode: true,
+            ),
+          ),
+        );
+        if (result != null && result is String) {
+          finalBarcodeToAdd = result;
+        }
+      }
+    }
+
+    if (finalBarcodeToAdd != null && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '${AppStrings.addedSuccess} ${existingProduct?.name ?? ''}',
+          ),
+          backgroundColor: Colors.green,
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    }
+
+    if (finalBarcodeToAdd != null) {
+      final productList = ref.read(productProvider);
+      final product = productList
+          .where((p) => p.barcode == finalBarcodeToAdd)
+          .firstOrNull;
+      final currentStoreId = ref.read(activeStoreIdProvider);
+      final history = await ref
+          .read(priceHistoryProvider)
+          .getHistoryForProduct(finalBarcodeToAdd);
+      final storeHistory = currentStoreId != null
+          ? history
+                .where((h) => h.storeId == currentStoreId)
+                .firstOrNull
+          : null;
+      final latestHistory =
+          storeHistory ??
+          (history.isNotEmpty ? history.first : null);
+      
+      double price = (isFreshBarcode && freshPrice != null)
+          ? freshPrice
+          : (latestHistory?.price ?? 0.0);
+
+      CartItemStatus status = CartItemStatus.ok;
+      if (currentStoreId != null) {
+        if (storeHistory == null)
+          status = CartItemStatus.error;
+        else if (price <= 0)
+          status = CartItemStatus.warning;
+      }
+      int qtyToAdd = 1;
+      if (handled && settings.requireCartConfirmation && mounted) {
+        final qty = await _askQuantity(context);
+        if (qty == null) return;
+        qtyToAdd = qty;
+      }
+
+      final newItem = CartItem(
+        id: const Uuid().v4(),
+        barcode: finalBarcodeToAdd,
+        name: product?.name ?? AppStrings.unknownProduct,
+        price: price,
+        unitPrice: latestHistory?.unitPrice ?? product?.pricePerKg,
+        promoType: latestHistory?.promoType,
+        imageUrl: product?.imageUrl,
+        status: status,
+        quantity: qtyToAdd,
+        originalPrice: latestHistory?.originalPrice,
+      );
+
+      ref.read(cartProvider.notifier).addItem(newItem);
+    }
+  }
+
+  Future<void> _promptToScanSuggestedProduct(Product product) async {
+    final isFresh = product.barcode.length == 7 && product.barcode.startsWith('2');
+    
+    await showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+        ),
+        title: Row(
+          children: [
+            const Icon(Icons.qr_code_scanner, color: Colors.indigo),
+            const SizedBox(width: 10),
+            const Text(
+              'Scansione Richiesta',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Il prezzo di "${product.name}" potrebbe essere cambiato.',
+              style: const TextStyle(fontSize: 16),
+            ),
+            const SizedBox(height: 12),
+            if (isFresh)
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: Colors.orange.shade50,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: Colors.orange.shade200),
+                ),
+                child: const Row(
+                  children: [
+                    Icon(Icons.scale, color: Colors.orange),
+                    SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Trattandosi di un prodotto fresco, è necessario scansionare il codice a barre stampato sulla bilancia per calcolare il peso e il prezzo corretti.',
+                        style: TextStyle(color: Colors.orange, fontSize: 13, fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                  ],
+                ),
+              )
+            else
+              Text(
+                'Per favore, scansiona il codice a barre del prodotto per verificarne e confermarne il prezzo corrente.',
+                style: TextStyle(color: Colors.grey.shade700, fontSize: 14),
+              ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Annulla'),
+          ),
+          ElevatedButton.icon(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.indigo,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
+            onPressed: () async {
+              Navigator.pop(context); // Chiude il dialogo informativo
+              
+              // Avvia lo scanner
+              final String? scannedCode = await Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const BarcodeScannerScreen(),
+                ),
+              );
+              
+              if (scannedCode != null) {
+                // Verifichiamo se il codice corrisponde
+                final isFreshBarcode = scannedCode.length == 13 && scannedCode.startsWith('2');
+                final searchBarcode = isFreshBarcode ? scannedCode.substring(0, 7) : scannedCode;
+                
+                if (searchBarcode == product.barcode) {
+                  // Corrispondenza esatta! Procedi alla scansione
+                  await _processScannedCode(scannedCode);
+                } else {
+                  // Codice scansionato diverso! Chiedi conferma
+                  final products = ref.read(productProvider);
+                  final scannedProduct = products
+                      .where((p) => p.barcode == searchBarcode)
+                      .firstOrNull;
+                  final scannedProductName = scannedProduct?.name ?? 'Nuovo Prodotto';
+                  
+                  if (mounted) {
+                    final bool? proceed = await showDialog<bool>(
+                      context: context,
+                      builder: (context) => AlertDialog(
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        title: Row(
+                          children: [
+                            const Icon(Icons.warning_amber_rounded, color: Colors.orange),
+                            const SizedBox(width: 10),
+                            const Text('Prodotto Diverso'),
+                          ],
+                        ),
+                        content: Text(
+                          'Hai scansionato "$scannedProductName" invece del prodotto consigliato "${product.name}".\n\nVuoi comunque aggiungere il prodotto scansionato?',
+                        ),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(context, false),
+                            child: const Text('Annulla'),
+                          ),
+                          ElevatedButton(
+                            style: ElevatedButton.styleFrom(backgroundColor: Colors.orange, foregroundColor: Colors.white),
+                            onPressed: () => Navigator.pop(context, true),
+                            child: const Text('Aggiungi Scansionato'),
+                          ),
+                        ],
+                      ),
+                    );
+                    
+                    if (proceed == true) {
+                      await _processScannedCode(scannedCode);
+                    }
+                  }
+                }
+              }
+            },
+            icon: const Icon(Icons.qr_code_scanner),
+            label: const Text('Scansiona Ora'),
+          ),
+        ],
+      ),
     );
   }
 }
