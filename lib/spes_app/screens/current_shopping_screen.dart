@@ -9,6 +9,7 @@ import '../providers/cart_provider.dart';
 import '../providers/product_provider.dart';
 import '../providers/price_history_provider.dart';
 import '../providers/store_provider.dart';
+import '../providers/promotion_provider.dart';
 import '../models/store.dart';
 import '../services/location_service.dart';
 import 'package:geolocator/geolocator.dart';
@@ -1447,6 +1448,22 @@ class _CurrentShoppingScreenState extends ConsumerState<CurrentShoppingScreen> {
                 );
 
                 if (confirmed == true) {
+                  DateTime? newPromoValidUntil = storeHistory.promoValidUntil != null 
+                      ? DateTime.fromMillisecondsSinceEpoch(storeHistory.promoValidUntil!) 
+                      : null;
+                  
+                  if (storeHistory.promoType != null && ref.read(settingsProvider).autoExtendPromos) {
+                    final defaultDays = ref.read(settingsProvider).defaultPromoDuration;
+                    newPromoValidUntil = now.add(Duration(days: defaultDays));
+                    
+                    final promos = ref.read(promotionProvider);
+                    final existingPromo = promos.where((p) => p.storeId == currentStoreId && p.name == storeHistory.promoType).firstOrNull;
+                    if (existingPromo != null) {
+                      final updatedPromo = existingPromo.copyWith(validUntil: newPromoValidUntil);
+                      await ref.read(promotionProvider.notifier).updatePromotion(updatedPromo);
+                    }
+                  }
+
                   await ref
                       .read(priceHistoryProvider)
                       .addPriceHistory(
@@ -1457,7 +1474,7 @@ class _CurrentShoppingScreenState extends ConsumerState<CurrentShoppingScreen> {
                           price: storeHistory.price,
                           timestamp: now.millisecondsSinceEpoch,
                           promoType: storeHistory.promoType,
-                          promoValidUntil: storeHistory.promoValidUntil,
+                          promoValidUntil: newPromoValidUntil?.millisecondsSinceEpoch,
                           originalPrice: storeHistory.originalPrice,
                         ),
                       );

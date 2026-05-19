@@ -11,19 +11,31 @@ import 'spes_app/screens/categories_screen.dart';
 import 'spes_app/screens/settings_screen.dart';
 import 'spes_app/screens/promotions_screen.dart';
 import 'spes_app/constants/app_strings.dart';
+import 'spes_app/providers/settings_provider.dart';
+import 'spes_app/providers/promotion_provider.dart';
 
 /// Schermata principale dell'applicazione SpesApp.
 /// Gestisce la navigazione tramite BottomNavigationBar per le sezioni principali
 /// e un Drawer laterale per le sezioni di gestione secondarie.
-class SpesAppScreen extends StatefulWidget {
+class SpesAppScreen extends ConsumerStatefulWidget {
   const SpesAppScreen({super.key});
 
   @override
-  State<SpesAppScreen> createState() => _SpesAppScreenState();
+  ConsumerState<SpesAppScreen> createState() => _SpesAppScreenState();
 }
 
-class _SpesAppScreenState extends State<SpesAppScreen> {
+class _SpesAppScreenState extends ConsumerState<SpesAppScreen> {
   int _currentIndex = 0;
+  
+  @override
+  void initState() {
+    super.initState();
+    Future.microtask(() {
+      if (ref.read(settingsProvider).autoCleanExpiredPromos) {
+        ref.read(promotionProvider.notifier).cleanExpiredPromos();
+      }
+    });
+  }
   
   // Lista delle pagine accessibili dalla barra di navigazione inferiore
   final List<Widget> _pages = const [

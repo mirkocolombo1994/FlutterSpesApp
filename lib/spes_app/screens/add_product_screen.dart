@@ -573,7 +573,7 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
               validFrom: DateTime.now(),
               validUntil:
                   _promoValidUntil ??
-                  DateTime.now().add(const Duration(days: 30)), // Fallback 30gg
+                  DateTime.now().add(Duration(days: ref.read(settingsProvider).defaultPromoDuration)),
             );
             await ref.read(promotionProvider.notifier).addPromotion(newPromo);
           } else {

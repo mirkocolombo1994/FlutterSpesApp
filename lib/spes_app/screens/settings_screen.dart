@@ -71,6 +71,41 @@ class SettingsScreen extends ConsumerWidget {
             onChanged: (val) => ref.read(settingsProvider.notifier).setShowCartWarnings(val),
           ),
           const Divider(),
+          _buildSectionHeader('Motore Promozionale'),
+          ListTile(
+            leading: const Icon(Icons.timer, color: Colors.indigo),
+            title: const Text('Durata Promozioni'),
+            subtitle: const Text('Durata predefinita (se non specificata)'),
+            trailing: DropdownButton<int>(
+              value: settings.defaultPromoDuration,
+              items: [7, 14, 21, 30].map((int value) {
+                return DropdownMenuItem<int>(
+                  value: value,
+                  child: Text('$value giorni'),
+                );
+              }).toList(),
+              onChanged: (newValue) {
+                if (newValue != null) {
+                  ref.read(settingsProvider.notifier).setDefaultPromoDuration(newValue);
+                }
+              },
+            ),
+          ),
+          SwitchListTile(
+            title: const Text('Auto-Estensione Promozioni'),
+            subtitle: const Text('Prolunga automaticamente se il prezzo è confermato in cassa'),
+            secondary: const Icon(Icons.auto_graph, color: Colors.indigo),
+            value: settings.autoExtendPromos,
+            onChanged: (val) => ref.read(settingsProvider.notifier).setAutoExtendPromos(val),
+          ),
+          SwitchListTile(
+            title: const Text('Pulizia Automatica'),
+            subtitle: const Text('Elimina all\'avvio le promozioni scadute da oltre 30 giorni'),
+            secondary: const Icon(Icons.cleaning_services, color: Colors.indigo),
+            value: settings.autoCleanExpiredPromos,
+            onChanged: (val) => ref.read(settingsProvider.notifier).setAutoCleanExpiredPromos(val),
+          ),
+          const Divider(),
           _buildSectionHeader('Cloud e Dati'),
           SwitchListTile(
             title: const Text('Risparmio Dati (Open Food Facts)'),

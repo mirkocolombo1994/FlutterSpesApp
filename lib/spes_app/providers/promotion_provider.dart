@@ -24,6 +24,11 @@ class PromotionNotifier extends Notifier<List<Promotion>> {
     await _loadPromotions();
   }
 
+  Future<void> updatePromotion(Promotion promo) async {
+    await SpesAppDatabaseHelper.instance.updatePromotion(promo);
+    await _loadPromotions();
+  }
+
   Future<void> removePromotion(String id) async {
     await SpesAppDatabaseHelper.instance.deletePromotion(id);
     await _loadPromotions();
@@ -39,5 +44,17 @@ class PromotionNotifier extends Notifier<List<Promotion>> {
 
   Future<void> unlinkProduct(String promoId, String barcode) async {
     await SpesAppDatabaseHelper.instance.unlinkProductFromPromotion(promoId, barcode);
+  }
+
+  Future<void> cleanExpiredPromos() async {
+    // Rimuove le promo scadute da più di 30 giorni
+    final cutoffDate = DateTime.now().subtract(const Duration(days: 30));
+    final promos = await SpesAppDatabaseHelper.instance.getPromotions();
+    for (final promo in promos) {
+      if (promo.validUntil.isBefore(cutoffDate)) {
+        await SpesAppDatabaseHelper.instance.deletePromotion(promo.id);
+      }
+    }
+    await _loadPromotions();
   }
 }

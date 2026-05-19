@@ -315,6 +315,11 @@ class SpesAppDatabaseHelper {
     await db.insert('promotions', promotion.toMap(), conflictAlgorithm: ConflictAlgorithm.replace);
   }
 
+  Future<void> updatePromotion(Promotion promotion) async {
+    final db = await instance.database;
+    await db.update('promotions', promotion.toMap(), where: 'id = ?', whereArgs: [promotion.id]);
+  }
+
   Future<List<Promotion>> getPromotions() async {
     final db = await instance.database;
     final result = await db.query('promotions');
