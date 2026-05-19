@@ -17,6 +17,26 @@ class Promotion {
     required this.validUntil,
   });
 
+  Promotion copyWith({
+    String? id,
+    String? name,
+    String? description,
+    double? discountPercentage,
+    String? storeId,
+    DateTime? validFrom,
+    DateTime? validUntil,
+  }) {
+    return Promotion(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      description: description ?? this.description,
+      discountPercentage: discountPercentage ?? this.discountPercentage,
+      storeId: storeId ?? this.storeId,
+      validFrom: validFrom ?? this.validFrom,
+      validUntil: validUntil ?? this.validUntil,
+    );
+  }
+
   Map<String, dynamic> toMap() {
     return {
       'id': id,

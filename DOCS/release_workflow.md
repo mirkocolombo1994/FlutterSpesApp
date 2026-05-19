@@ -1,58 +1,66 @@
-# Procedura di Rilascio SpesApp
+# Procedura Operativa Standard (SOP) - Rilascio SpesApp
 
-Questa guida descrive i passaggi dettagliati per pubblicare una nuova versione dell'applicazione, garantendo la sincronia tra i branch `develop` e `main` e la creazione di una release ufficiale sul repository.
+Questa guida definisce il processo rigoroso per il rilascio di nuove versioni. Seguire questi passaggi garantisce stabilità, tracciabilità e integrità del database.
 
-## Pre-requisiti
-- Sei sul branch `develop`.
-- Tutti i cambiamenti sono stati testati e sono pronti per il rilascio.
+## Fase 1: Verifica Pre-Rilascio
+Prima di iniziare la procedura git, è obbligatorio testare l'app in modalità reale per evitare "stuttering" da debug mode.
+1. Collega un dispositivo fisico.
+2. Esegui:
+   ```bash
+   flutter run --release
+   ```
+3. Verifica che i flussi principali (Scanner, Carrello, DB migrations) funzionino senza rallentamenti ("App isn't responding").
 
 ---
 
-## Passaggi per il Rilascio
+## Fase 2: Preparazione Metadati
+1. **Aggiornamento Versione**: In `pubspec.yaml`, incrementa la `version`.
+   - Modifica Minor (es. `0.3.x` -> `0.4.0`) per nuove feature consistenti.
+   - Modifica Patch (es. `0.4.0` -> `0.4.1`) per soli bugfix.
+   - Incrementa sempre il build number dopo il `+` (es. `+6` -> `+7`).
+2. **Aggiornamento Changelog**: In `CHANGELOG.md`, aggiungi in testa la nuova versione con la data odierna.
+   - Usa le icone: ✨ (Features), 🐛 (Bug Fixes), ⚙️ (Manutenzione).
 
-### 1. Aggiornamento Versione
-Aggiorna il file `pubspec.yaml` incrementando il numero di versione e il build number:
-- Esempio: `0.3.0+6` dove `0.3.0` è la versione semantica e `6` è il build progressivo.
+---
 
-### 2. Consolidamento su Develop
-Esegui il commit di tutte le modifiche (incluso l'aggiornamento di `pubspec.yaml`) sul branch `develop`.
+## Fase 3: Consolidamento Sviluppo
+Tutti i cambiamenti devono essere "congelati" sul branch di sviluppo.
 ```bash
 git add .
-git commit -m "feat: [Descrizione breve della feature]"
+git commit -m "chore: bump version to [VERSION] and update changelog"
 git push origin develop
 ```
 
-### 3. Allineamento Branch Main
-Prima di fondere i cambiamenti, assicurati che il branch `main` locale sia aggiornato rispetto al server:
-```bash
-git checkout main
-git pull origin main
-```
-> [!IMPORTANT]
-> Non saltare il `git pull origin main` per evitare errori di caricamente (push fallito per branch dietro il server).
+---
 
-### 4. Merge e Push Finale
-Fondi le novità di `develop` su `main` e invia tutto sul server:
-```bash
-git merge develop
-git push origin main
-```
-
-### 5. Creazione Release (Tag)
-Crea un "Tag annotato" per marcare la versione nel repository GitHub:
-```bash
-git tag -a v0.3.0 -m "Release v0.3.0: Descrizione sintetica"
-git push origin v0.3.0
-```
-
-### 6. Ritorno allo Sviluppo
-Torna sul branch `develop` per proseguire il lavoro:
-```bash
-git checkout develop
-```
+## Fase 4: Merge su Produzione (Main)
+Il branch `main` deve sempre rappresentare l'ultimo stato stabile rilasciato.
+1. Spostati su main: `git checkout main`
+2. Aggiorna main: `git pull origin main` (Cruciale per evitare conflitti remoti)
+3. Fondi lo sviluppo: `git merge develop`
+4. Invia i cambiamenti: `git push origin main`
 
 ---
 
-## Troubleshooting Comuni
-- **Push Fallito (Updates Rejected)**: Significa che qualcuno ha pushato sul server prima di te. Esegui `git pull origin main --rebase` e riprova il push.
-- **Conflitti di Merge**: Se ci sono file modificati sia su `develop` che su `main`, git ti chiederà di risolverli manualmente prima di completare il commit di merge.
+## Fase 5: Tagging Ufficiale
+I tag permettono a GitHub Actions (e agli sviluppatori) di identificare i punti di rilascio.
+1. Crea il tag annotato:
+   ```bash
+   git tag -a v0.4.0 -m "Release v0.4.0: [Titolo sintetico]"
+   ```
+2. Invia i tag al server:
+   ```bash
+   git push origin --tags
+   ```
+
+---
+
+## Fase 6: Post-Rilascio
+1. Torna subito su develop: `git checkout develop`
+2. Verifica su GitHub che la release/tag sia visibile.
+
+---
+
+## Note Tecniche
+- **Database**: Se hai modificato lo schema (DB Helper), assicurati che la versione nel codice sia stata incrementata PRIMA del merge.
+- **Assets**: Se sono state aggiunte nuove immagini o font, verifica che siano listate in `pubspec.yaml`.

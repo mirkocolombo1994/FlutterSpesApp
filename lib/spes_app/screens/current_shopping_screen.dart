@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:task_master_app/spes_app/models/product.dart';
 import 'package:uuid/uuid.dart';
 import 'barcode_scanner_screen.dart';
 import 'add_product_screen.dart';
@@ -8,6 +9,7 @@ import '../providers/cart_provider.dart';
 import '../providers/product_provider.dart';
 import '../providers/price_history_provider.dart';
 import '../providers/store_provider.dart';
+import '../providers/promotion_provider.dart';
 import '../models/store.dart';
 import '../services/location_service.dart';
 import 'package:geolocator/geolocator.dart';
@@ -17,19 +19,24 @@ import 'dart:async';
 import '../constants/app_strings.dart';
 import '../providers/settings_provider.dart';
 import '../services/promotion_engine.dart';
+import 'package:intl/intl.dart';
+import '../widgets/superfast_scan_dialog.dart';
+import '../widgets/ai_suggestions_carousel.dart';
+import '../services/prediction_engine.dart';
 
 class CurrentShoppingScreen extends ConsumerStatefulWidget {
   const CurrentShoppingScreen({super.key});
   @override
-  ConsumerState<CurrentShoppingScreen> createState() => _CurrentShoppingScreenState();
+  ConsumerState<CurrentShoppingScreen> createState() =>
+      _CurrentShoppingScreenState();
 }
 
 class _CurrentShoppingScreenState extends ConsumerState<CurrentShoppingScreen> {
-
   bool _gpsFetched = false;
   Timer? _locationTimer;
   bool _isCheckingLocation = false;
   bool _isShowingDialog = false;
+  final ScrollController _scrollController = ScrollController();
 
   @override
   void initState() {
@@ -50,6 +57,7 @@ class _CurrentShoppingScreenState extends ConsumerState<CurrentShoppingScreen> {
   @override
   void dispose() {
     _locationTimer?.cancel();
+    _scrollController.dispose();
     super.dispose();
   }
 
@@ -70,15 +78,27 @@ class _CurrentShoppingScreenState extends ConsumerState<CurrentShoppingScreen> {
     try {
       if (!await Geolocator.isLocationServiceEnabled()) return;
       LocationPermission permission = await Geolocator.checkPermission();
-      if (permission == LocationPermission.denied || permission == LocationPermission.deniedForever) return;
+      if (permission == LocationPermission.denied ||
+          permission == LocationPermission.deniedForever)
+        return;
 
-      final pos = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high);
+      final pos = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+      );
       final stores = ref.read(storeProvider);
-      final activeStore = stores.where((s) => s.id == activeStoreId).firstOrNull;
+      final activeStore = stores
+          .where((s) => s.id == activeStoreId)
+          .firstOrNull;
 
-      if (activeStore != null && activeStore.latitude != null && activeStore.longitude != null) {
+      if (activeStore != null &&
+          activeStore.latitude != null &&
+          activeStore.longitude != null) {
         final distance = const Distance();
-        final dToActive = distance.as(LengthUnit.Meter, LatLng(pos.latitude, pos.longitude), LatLng(activeStore.latitude!, activeStore.longitude!));
+        final dToActive = distance.as(
+          LengthUnit.Meter,
+          LatLng(pos.latitude, pos.longitude),
+          LatLng(activeStore.latitude!, activeStore.longitude!),
+        );
 
         // Se siamo ancora "dentro" (250m), non facciamo nulla
         if (dToActive < 250) return;
@@ -88,7 +108,11 @@ class _CurrentShoppingScreenState extends ConsumerState<CurrentShoppingScreen> {
         for (var s in stores) {
           if (s.id == activeStoreId) continue;
           if (s.latitude != null && s.longitude != null) {
-            final d = distance.as(LengthUnit.Meter, LatLng(pos.latitude, pos.longitude), LatLng(s.latitude!, s.longitude!));
+            final d = distance.as(
+              LengthUnit.Meter,
+              LatLng(pos.latitude, pos.longitude),
+              LatLng(s.latitude!, s.longitude!),
+            );
             if (d < 100) {
               foundStore = s;
               break;
@@ -98,15 +122,23 @@ class _CurrentShoppingScreenState extends ConsumerState<CurrentShoppingScreen> {
 
         // Se non trovato in DB, cerchiamo online (Overpass/Nominatim)
         if (foundStore == null) {
-          final placeName = await LocationService.lookupSupermarketName(pos.latitude, pos.longitude);
+          final placeName = await LocationService.lookupSupermarketName(
+            pos.latitude,
+            pos.longitude,
+          );
           if (placeName != null) {
-             // Verifichiamo che non sia lo stesso nome dello store attivo (magari stessa catena)
-             if (placeName.toLowerCase() != activeStore.name.toLowerCase()) {
-               _showLocationChangeDialog(placeName, pos.latitude, pos.longitude);
-             }
+            // Verifichiamo che non sia lo stesso nome dello store attivo (magari stessa catena)
+            if (placeName.toLowerCase() != activeStore.name.toLowerCase()) {
+              _showLocationChangeDialog(placeName, pos.latitude, pos.longitude);
+            }
           }
         } else {
-          _showLocationChangeDialog(foundStore.name, foundStore.latitude!, foundStore.longitude!, existingStore: foundStore);
+          _showLocationChangeDialog(
+            foundStore.name,
+            foundStore.latitude!,
+            foundStore.longitude!,
+            existingStore: foundStore,
+          );
         }
       }
     } catch (_) {
@@ -115,11 +147,16 @@ class _CurrentShoppingScreenState extends ConsumerState<CurrentShoppingScreen> {
     }
   }
 
-  void _showLocationChangeDialog(String storeName, double lat, double lon, {Store? existingStore}) {
+  void _showLocationChangeDialog(
+    String storeName,
+    double lat,
+    double lon, {
+    Store? existingStore,
+  }) {
     if (!mounted || _isShowingDialog) return;
-    
+
     setState(() => _isShowingDialog = true);
-    
+
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -161,14 +198,16 @@ class _CurrentShoppingScreenState extends ConsumerState<CurrentShoppingScreen> {
 
               ref.read(activeStoreIdProvider.notifier).setId(targetStoreId);
               ref.read(cartProvider.notifier).clear();
-              
+
               if (mounted) {
                 Navigator.pop(ctx);
                 setState(() => _isShowingDialog = false);
-                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                  content: Text('${AppStrings.navPuntiVendita}: $storeName'),
-                  backgroundColor: Colors.indigo,
-                ));
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('${AppStrings.navPuntiVendita}: $storeName'),
+                    backgroundColor: Colors.indigo,
+                  ),
+                );
               }
             },
             child: const Text(AppStrings.switchToNewStore),
@@ -183,11 +222,15 @@ class _CurrentShoppingScreenState extends ConsumerState<CurrentShoppingScreen> {
       if (!await Geolocator.isLocationServiceEnabled()) return null;
       LocationPermission permission = await Geolocator.checkPermission();
       if (permission == LocationPermission.denied) {
-         permission = await Geolocator.requestPermission();
+        permission = await Geolocator.requestPermission();
       }
-      if (permission != LocationPermission.whileInUse && permission != LocationPermission.always) return null;
+      if (permission != LocationPermission.whileInUse &&
+          permission != LocationPermission.always)
+        return null;
 
-      final pos = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high).timeout(const Duration(seconds: 8));
+      final pos = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+      ).timeout(const Duration(seconds: 8));
 
       final stores = ref.read(storeProvider);
       final distance = const Distance();
@@ -196,7 +239,11 @@ class _CurrentShoppingScreenState extends ConsumerState<CurrentShoppingScreen> {
 
       for (var s in stores) {
         if (s.latitude != null && s.longitude != null) {
-          final d = distance.as(LengthUnit.Meter, LatLng(pos.latitude, pos.longitude), LatLng(s.latitude!, s.longitude!));
+          final d = distance.as(
+            LengthUnit.Meter,
+            LatLng(pos.latitude, pos.longitude),
+            LatLng(s.latitude!, s.longitude!),
+          );
           // Raggio di 100 metri
           if (d < 100 && d < minDistance) {
             minDistance = d;
@@ -208,7 +255,10 @@ class _CurrentShoppingScreenState extends ConsumerState<CurrentShoppingScreen> {
       if (closestStore != null) return closestStore.id;
 
       // Cerca il nome dalle coordinate se non hai supermercati salvati
-      final placeName = await LocationService.lookupSupermarketName(pos.latitude, pos.longitude);
+      final placeName = await LocationService.lookupSupermarketName(
+        pos.latitude,
+        pos.longitude,
+      );
       if (placeName != null) {
         final newStore = Store(
           id: const Uuid().v4(),
@@ -220,10 +270,12 @@ class _CurrentShoppingScreenState extends ConsumerState<CurrentShoppingScreen> {
         await ref.read(storeProvider.notifier).addStore(newStore);
         ref.read(newlyAddedStoreIdProvider.notifier).setId(newStore.id);
         if (mounted) {
-           ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-             content: Text('${AppStrings.newStoreAutoSaved} $placeName'),
-             backgroundColor: Colors.green,
-           ));
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('${AppStrings.newStoreAutoSaved} $placeName'),
+              backgroundColor: Colors.green,
+            ),
+          );
         }
         return newStore.id;
       }
@@ -233,8 +285,25 @@ class _CurrentShoppingScreenState extends ConsumerState<CurrentShoppingScreen> {
 
   @override
   Widget build(BuildContext context) {
+    ref.listen<List<CartItem>>(cartProvider, (previous, next) {
+      if (next.length > (previous?.length ?? 0)) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (_scrollController.hasClients) {
+            _scrollController.animateTo(
+              _scrollController.position.maxScrollExtent,
+              duration: const Duration(milliseconds: 300),
+              curve: Curves.easeOut,
+            );
+          }
+        });
+      }
+    });
+
     final cartItems = ref.watch(cartProvider);
-    final total = cartItems.fold<double>(0, (sum, item) => sum + (item.price * item.quantity));
+    final total = cartItems.fold<double>(
+      0,
+      (sum, item) => sum + (item.price * item.quantity),
+    );
     final activeStoreId = ref.watch(activeStoreIdProvider);
     final stores = ref.watch(storeProvider);
     final currentStore = stores.where((s) => s.id == activeStoreId).firstOrNull;
@@ -254,10 +323,16 @@ class _CurrentShoppingScreenState extends ConsumerState<CurrentShoppingScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(AppStrings.storeSelectorLabel, style: TextStyle(fontSize: 12, color: Colors.indigo)),
+                    const Text(
+                      AppStrings.storeSelectorLabel,
+                      style: TextStyle(fontSize: 12, color: Colors.indigo),
+                    ),
                     Text(
                       currentStore?.name ?? AppStrings.storeNotDetected,
-                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                      ),
                     ),
                   ],
                 ),
@@ -271,149 +346,381 @@ class _CurrentShoppingScreenState extends ConsumerState<CurrentShoppingScreen> {
           ),
         ),
         Expanded(
-          child: cartItems.isEmpty
-              ? const Center(child: Padding(
-                  padding: EdgeInsets.all(32.0),
-                  child: Text(
-                    AppStrings.emptyCart,
-                    textAlign: TextAlign.center,
-                    style: TextStyle(fontSize: 16, color: Colors.grey),
-                  ),
-                ))
-              : ListView.builder(
-                  itemCount: cartItems.length,
-                  itemBuilder: (context, index) {
-                    final item = cartItems[index];
-                    final isFresh = item.barcode.length == 7 && item.barcode.startsWith('2');
-                    
-                    return ListTile(
-                      leading: _buildItemLeading(item),
-                      title: Row(
-                        children: [
-                          Expanded(child: Text(item.name, style: const TextStyle(fontWeight: FontWeight.bold))),
-                          if (item.status == CartItemStatus.warning && settings.showCartWarnings)
-                             Tooltip(
-                               message: AppStrings.priceMissingInStore,
-                               triggerMode: TooltipTriggerMode.tap,
-                               child: const Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 20),
-                             ),
-                          if (item.status == CartItemStatus.error && settings.showCartWarnings)
-                             Tooltip(
-                               message: AppStrings.productNotIndexedInStore,
-                               triggerMode: TooltipTriggerMode.tap,
-                               child: const Icon(Icons.error_outline, color: Colors.red, size: 20),
-                             ),
-                          if (item.promoType != null)
-                            Container(
-                              margin: const EdgeInsets.only(left: 8),
-                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                              decoration: BoxDecoration(
-                                color: Colors.orange.shade100,
-                                borderRadius: BorderRadius.circular(4),
-                                border: Border.all(color: Colors.orange),
+          child: Column(
+            children: [
+              if (cartItems.isNotEmpty)
+                AiSuggestionsCarousel(
+                  storeId: activeStoreId,
+                  onAdd: (product) => _promptToScanSuggestedProduct(product),
+                ),
+              Expanded(
+                child: cartItems.isEmpty
+                    ? SingleChildScrollView(
+                        child: Column(
+                          children: [
+                            const Padding(
+                              padding: EdgeInsets.symmetric(
+                                horizontal: 32.0,
+                                vertical: 48.0,
                               ),
                               child: Text(
-                                item.promoType!,
-                                style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.orange),
+                                AppStrings.emptyCart,
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  color: Colors.grey,
+                                ),
                               ),
                             ),
-                        ],
-                      ),
-                      subtitle: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          if (item.isPromoFree && item.originalPrice != null)
-                             Text(
-                               '€${item.originalPrice!.toStringAsFixed(2)}', 
-                               style: const TextStyle(
-                                 decoration: TextDecoration.lineThrough,
-                                 color: Colors.grey,
-                                 fontSize: 12
-                               )
-                             ),
-                          Text(
-                            item.isPromoFree 
-                              ? 'OMAGGIO (€0.00)' 
-                              : isFresh 
-                                ? '${AppStrings.freshIndicatorLabel} - €${item.price.toStringAsFixed(2)}' 
-                                : '${item.price.toStringAsFixed(2)} ${AppStrings.pricePerUnit}',
-                            style: TextStyle(
-                              color: item.isPromoFree ? Colors.green : null,
-                              fontWeight: item.isPromoFree ? FontWeight.bold : null,
-                            ),
-                          ),
-                          if (item.unitPrice != null && item.unitPrice! > 0 && !item.isPromoFree)
-                            Text(
-                              '(${item.unitPrice!.toStringAsFixed(2)} ${isFresh ? '€/Kg' : '€/unità'})',
-                              style: TextStyle(fontSize: 11, color: Colors.grey.shade600, fontStyle: FontStyle.italic),
-                            ),
-                        ],
-                      ),
-                      trailing: (() {
-                        final isChild = item.isPromoFree || item.parentId != null;
-                        final canModify = !isChild; // I genitori sono sempre modificabili per gestire i multiset
-                        
-                        return Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            IconButton(
-                              icon: Icon(Icons.remove_circle_outline, color: (item.quantity > 1 && canModify) ? Colors.indigo : Colors.grey),
-                              onPressed: (item.quantity > 1 && canModify)
-                                  ? () => ref.read(cartProvider.notifier).updateQuantity(item.id, item.quantity - 1)
-                                  : null,
-                            ),
-                            Text('${item.quantity}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                            IconButton(
-                              icon: Icon(Icons.add_circle_outline, color: canModify ? Colors.indigo : Colors.grey),
-                              onPressed: canModify
-                                  ? () async {
-                                      final rule = PromotionEngine.getRule(item.promoType);
-                                      if (rule != null && rule.shouldTriggerScan(item.quantity) && mounted) {
-                                        // [FIX] Verifichiamo quanti omaggi abbiamo già riscattato per questo genitore
-                                        final cart = ref.read(cartProvider);
-                                        // Sommiamo correttamente le quantità fisiche degli omaggi
-                                        final currentFreeCount = cart
-                                            .where((i) => i.parentId == item.id)
-                                            .fold<int>(0, (sum, i) => sum + i.quantity);
-                                        // Calcoliamo quanti omaggi dovremmo avere in base ai pezzi paganti attuali
-                                        final expectedFreeCount = (item.quantity ~/ rule.paidPiecesPerSet) * rule.freeItemsCount;
-
-                                        if (currentFreeCount < expectedFreeCount) {
-                                          // Siamo sotto la soglia degli omaggi previsti -> Triggeriamo il dialogo
-                                          await _handlePromoScanning(context, ref, item, rule);
-                                        } else {
-                                          // Abbiamo già tutti gli omaggi per i prodotti attuali -> Aumentiamo i paganti
-                                          ref.read(cartProvider.notifier).updateQuantity(item.id, item.quantity + 1);
-                                        }
-                                      } else {
-                                        // Nessun trigger promozionale (es. 2.5/2 non è intero o promo nulla) -> Aumentiamo i paganti
-                                        ref.read(cartProvider.notifier).updateQuantity(item.id, item.quantity + 1);
-                                      }
-                                    }
-                                  : null,
-                            ),
-                            IconButton(
-                              icon: const Icon(Icons.delete, color: Colors.red),
-                              onPressed: () => ref.read(cartProvider.notifier).removeItem(item.id),
+                            AiSuggestionsCarousel(
+                              storeId: activeStoreId,
+                              onAdd: (product) =>
+                                  _promptToScanSuggestedProduct(product),
                             ),
                           ],
-                        );
-                      })(),
-                    );
-                  },
-                ),
+                        ),
+                      )
+                    : ListView.builder(
+                        controller: _scrollController,
+                        itemCount: cartItems.length,
+                        itemBuilder: (context, index) {
+                          final item = cartItems[index];
+                          final isFresh =
+                              item.barcode.length == 7 &&
+                              item.barcode.startsWith('2');
+
+                          return ListTile(
+                            contentPadding: const EdgeInsets.only(
+                              left: 8.0,
+                              right: 8.0,
+                            ),
+                            leading: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                IconButton(
+                                  icon: const Icon(
+                                    Icons.delete_outline,
+                                    color: Colors.red,
+                                    size: 24,
+                                  ),
+                                  padding: EdgeInsets.zero,
+                                  visualDensity: const VisualDensity(
+                                    horizontal: VisualDensity.minimumDensity,
+                                    vertical: VisualDensity.minimumDensity,
+                                  ),
+
+                                  constraints: const BoxConstraints(),
+                                  onPressed: () => ref
+                                      .read(cartProvider.notifier)
+                                      .removeItem(item.id),
+                                ),
+                                const SizedBox(width: 4),
+                                _buildItemLeading(item),
+                              ],
+                            ),
+                            title: Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    item.name,
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
+                                if (item.status == CartItemStatus.warning &&
+                                    settings.showCartWarnings)
+                                  Tooltip(
+                                    message: AppStrings.priceMissingInStore,
+                                    triggerMode: TooltipTriggerMode.tap,
+                                    child: const Icon(
+                                      Icons.warning_amber_rounded,
+                                      color: Colors.orange,
+                                      size: 20,
+                                    ),
+                                  ),
+                                if (item.status == CartItemStatus.error &&
+                                    settings.showCartWarnings)
+                                  Tooltip(
+                                    message:
+                                        AppStrings.productNotIndexedInStore,
+                                    triggerMode: TooltipTriggerMode.tap,
+                                    child: const Icon(
+                                      Icons.error_outline,
+                                      color: Colors.red,
+                                      size: 20,
+                                    ),
+                                  ),
+                                if (item.promoType != null)
+                                  Container(
+                                    margin: const EdgeInsets.only(left: 8),
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 6,
+                                      vertical: 2,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: Colors.orange.shade100,
+                                      borderRadius: BorderRadius.circular(4),
+                                      border: Border.all(color: Colors.orange),
+                                    ),
+                                    child: Text(
+                                      item.promoType!,
+                                      style: const TextStyle(
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.orange,
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                            subtitle: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                if (item.originalPrice != null)
+                                  Text(
+                                    '€${item.originalPrice!.toStringAsFixed(2)}',
+                                    style: const TextStyle(
+                                      decoration: TextDecoration.lineThrough,
+                                      color: Colors.grey,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                Text(
+                                  item.isPromoFree
+                                      ? 'OMAGGIO (€0.00)'
+                                      : isFresh
+                                      ? '${AppStrings.freshIndicatorLabel} - €${item.price.toStringAsFixed(2)}'
+                                      : '${item.price.toStringAsFixed(2)} ${AppStrings.pricePerUnit}',
+                                  style: TextStyle(
+                                    color: item.isPromoFree
+                                        ? Colors.green
+                                        : null,
+                                    fontWeight: item.isPromoFree
+                                        ? FontWeight.bold
+                                        : null,
+                                  ),
+                                ),
+                                if (item.unitPrice != null &&
+                                    item.unitPrice! > 0 &&
+                                    !item.isPromoFree)
+                                  Text(
+                                    '(${item.unitPrice!.toStringAsFixed(2)} ${isFresh ? '€/Kg' : '€/unità'})',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      color: Colors.grey.shade600,
+                                      fontStyle: FontStyle.italic,
+                                    ),
+                                  ),
+                                FutureBuilder<String>(
+                                  future: PredictionEngine.instance
+                                      .evaluatePriceDeal(
+                                        item.barcode,
+                                        activeStoreId ?? '',
+                                        item.price,
+                                      ),
+                                  builder: (context, snapshot) {
+                                    if (!snapshot.hasData ||
+                                        snapshot.data!.isEmpty) {
+                                      return const SizedBox.shrink();
+                                    }
+                                    final deal = snapshot.data!;
+                                    String text;
+                                    Color color;
+                                    IconData icon;
+
+                                    if (deal == 'excellent') {
+                                      text = AppStrings.dealExcellent;
+                                      color = Colors.redAccent.shade700;
+                                      icon = Icons.whatshot;
+                                    } else if (deal == 'good') {
+                                      text = AppStrings.dealGood;
+                                      color = Colors.green.shade700;
+                                      icon = Icons.thumb_up;
+                                    } else if (deal == 'expensive') {
+                                      text = AppStrings.dealExpensive;
+                                      color = Colors.amber.shade900;
+                                      icon = Icons.warning;
+                                    } else {
+                                      return const SizedBox.shrink();
+                                    }
+
+                                    return Container(
+                                      margin: const EdgeInsets.only(top: 4),
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 6,
+                                        vertical: 2,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: color.withOpacity(0.1),
+                                        borderRadius: BorderRadius.circular(6),
+                                        border: Border.all(
+                                          color: color.withOpacity(0.3),
+                                          width: 1,
+                                        ),
+                                      ),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Icon(icon, size: 10, color: color),
+                                          const SizedBox(width: 4),
+                                          Text(
+                                            text,
+                                            style: TextStyle(
+                                              fontSize: 9,
+                                              fontWeight: FontWeight.bold,
+                                              color: color,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    );
+                                  },
+                                ),
+                              ],
+                            ),
+                            trailing: (() {
+                              final isChild =
+                                  item.isPromoFree || item.parentId != null;
+                              final canModify =
+                                  !isChild; // I genitori sono sempre modificabili per gestire i multiset
+
+                              return Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  IconButton(
+                                    icon: Icon(
+                                      Icons.remove_circle_outline,
+                                      color: (item.quantity > 1 && canModify)
+                                          ? Colors.indigo
+                                          : Colors.grey,
+                                    ),
+                                    onPressed: (item.quantity > 1 && canModify)
+                                        ? () => ref
+                                              .read(cartProvider.notifier)
+                                              .updateQuantity(
+                                                item.id,
+                                                item.quantity - 1,
+                                              )
+                                        : null,
+                                  ),
+                                  Text(
+                                    '${item.quantity}',
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 16,
+                                    ),
+                                  ),
+                                  IconButton(
+                                    icon: Icon(
+                                      Icons.add_circle_outline,
+                                      color: canModify
+                                          ? Colors.indigo
+                                          : Colors.grey,
+                                    ),
+                                    onPressed: canModify
+                                        ? () async {
+                                            final rule =
+                                                PromotionEngine.getRule(
+                                                  item.promoType,
+                                                );
+                                            if (rule != null &&
+                                                rule.shouldTriggerScan(
+                                                  item.quantity,
+                                                ) &&
+                                                mounted) {
+                                              // [FIX] Verifichiamo quanti omaggi abbiamo già riscattato per questo genitore
+                                              final cart = ref.read(
+                                                cartProvider,
+                                              );
+                                              // Sommiamo correttamente le quantità fisiche degli omaggi
+                                              final currentFreeCount = cart
+                                                  .where(
+                                                    (i) =>
+                                                        i.parentId == item.id,
+                                                  )
+                                                  .fold<int>(
+                                                    0,
+                                                    (sum, i) =>
+                                                        sum + i.quantity,
+                                                  );
+                                              // Calcoliamo quanti omaggi dovremmo avere in base ai pezzi paganti attuali
+                                              final expectedFreeCount =
+                                                  (item.quantity ~/
+                                                      rule.paidPiecesPerSet) *
+                                                  rule.freeItemsCount;
+
+                                              if (currentFreeCount <
+                                                  expectedFreeCount) {
+                                                // Siamo sotto la soglia degli omaggi previsti -> Triggeriamo il dialogo
+                                                await _handlePromoScanning(
+                                                  context,
+                                                  ref,
+                                                  item,
+                                                  rule,
+                                                );
+                                              } else {
+                                                // Abbiamo già tutti gli omaggi per i prodotti attuali -> Aumentiamo i paganti
+                                                ref
+                                                    .read(cartProvider.notifier)
+                                                    .updateQuantity(
+                                                      item.id,
+                                                      item.quantity + 1,
+                                                    );
+                                              }
+                                            } else {
+                                              // Nessun trigger promozionale (es. 2.5/2 non è intero o promo nulla) -> Aumentiamo i paganti
+                                              ref
+                                                  .read(cartProvider.notifier)
+                                                  .updateQuantity(
+                                                    item.id,
+                                                    item.quantity + 1,
+                                                  );
+                                            }
+                                          }
+                                        : null,
+                                  ),
+                                  Text(
+                                    '${(item.price * item.quantity).toStringAsFixed(2)}€',
+                                    style: const TextStyle(
+                                      color: Colors.indigo,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                ],
+                              );
+                            })(),
+                          );
+                        },
+                      ),
+              ),
+            ],
+          ),
         ),
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
           decoration: BoxDecoration(
             color: Colors.indigo.shade50,
-            border: Border(top: BorderSide(color: Colors.indigo.shade100, width: 2))
+            border: Border(
+              top: BorderSide(color: Colors.indigo.shade100, width: 2),
+            ),
           ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text(AppStrings.totalLabel, style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
-              Text('€${total.toStringAsFixed(2)}', style: const TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: Colors.green)),
+              const Text(
+                AppStrings.totalLabel,
+                style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+              ),
+              Text(
+                '€${total.toStringAsFixed(2)}',
+                style: const TextStyle(
+                  fontSize: 26,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.green,
+                ),
+              ),
             ],
           ),
         ),
@@ -422,153 +729,22 @@ class _CurrentShoppingScreenState extends ConsumerState<CurrentShoppingScreen> {
           padding: const EdgeInsets.only(bottom: 16.0),
           child: FloatingActionButton.extended(
             icon: const Icon(Icons.qr_code_scanner, size: 30),
-            label: const Text(AppStrings.addProductLabel, style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            label: const Text(
+              AppStrings.addProductLabel,
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
             backgroundColor: Colors.indigo,
             foregroundColor: Colors.white,
             elevation: 6,
             onPressed: () async {
-              final gpsFuture = _fetchGpsAndStore(ref);
               final String? scannedCode = await Navigator.push(
                 context,
-                MaterialPageRoute(builder: (context) => const BarcodeScannerScreen()),
+                MaterialPageRoute(
+                  builder: (context) => const BarcodeScannerScreen(),
+                ),
               );
               if (scannedCode != null) {
-                showDialog(context: context, barrierDismissible: false, builder: (_) => const Center(child: CircularProgressIndicator()));
-                final storeId = await gpsFuture;
-                if (mounted) Navigator.pop(context);
-                if (storeId != null && ref.read(activeStoreIdProvider) == null) {
-                   ref.read(activeStoreIdProvider.notifier).setId(storeId);
-                }
-                final products = ref.read(productProvider);
-                final existingProduct = products.where((p) => p.barcode == scannedCode).firstOrNull;
-                String? finalBarcodeToAdd;
-                bool handled = false;
-                
-                if (existingProduct != null) {
-                  final currentStoreId = ref.read(activeStoreIdProvider);
-                  
-                  if (currentStoreId != null) {
-                    final history = await ref.read(priceHistoryProvider).getHistoryForProduct(scannedCode);
-                    final storeHistory = history.where((h) => h.storeId == currentStoreId).firstOrNull;
-                    
-                    if (storeHistory != null) {
-                      final historyDate = DateTime.fromMillisecondsSinceEpoch(storeHistory.timestamp);
-                      final now = DateTime.now();
-                      bool isSameDay = historyDate.year == now.year && historyDate.month == now.month && historyDate.day == now.day;
-                      
-                      if (!isSameDay) {
-                        if (mounted) {
-                          final bool? confirmed = await showDialog<bool>(
-                            context: context,
-                            builder: (context) => AlertDialog(
-                              title: const Text(AppStrings.priceValidationTitle),
-                              content: Text('${AppStrings.priceValidationMessage}${storeHistory.price.toStringAsFixed(2)}${AppStrings.priceValidationQuestion}'),
-                              actions: [
-                                TextButton(
-                                  onPressed: () => Navigator.pop(context, false),
-                                  child: const Text(AppStrings.priceChanged),
-                                ),
-                                ElevatedButton(
-                                  onPressed: () => Navigator.pop(context, true),
-                                  child: const Text(AppStrings.priceConfirmed),
-                                ),
-                              ],
-                            ),
-                          );
-                          
-                          if (confirmed == true) {
-                            await ref.read(priceHistoryProvider).addPriceHistory(PriceHistory(
-                              id: const Uuid().v4(),
-                              productBarcode: scannedCode,
-                              storeId: currentStoreId,
-                              price: storeHistory.price,
-                              timestamp: now.millisecondsSinceEpoch,
-                              promoType: storeHistory.promoType,
-                              promoValidUntil: storeHistory.promoValidUntil,
-                            ));
-                            finalBarcodeToAdd = scannedCode;
-                            handled = true;
-                          } else if (confirmed == false) {
-                            // Leave handled = false to trigger AddProductScreen below
-                          } else {
-                            handled = true; // Dismissed
-                          }
-                        } else {
-                           handled = true;
-                        }
-                      } else {
-                        // Already checked today
-                        finalBarcodeToAdd = scannedCode;
-                        handled = true;
-                      }
-                    }
-                  }
-                  
-                  if (!handled) {
-                    if (mounted) {
-                      final result = await Navigator.push(
-                        context,
-                        MaterialPageRoute(builder: (context) => AddProductScreen(initialBarcode: scannedCode, preselectedStoreId: currentStoreId, isFastMode: true)),
-                      );
-                      if (result != null && result is String) {
-                        finalBarcodeToAdd = result;
-                      }
-                    }
-                  }
-                  
-                  if (finalBarcodeToAdd != null && mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                      content: Text('${AppStrings.addedSuccess} ${existingProduct.name}'),
-                      backgroundColor: Colors.green,
-                      duration: const Duration(seconds: 2),
-                    ));
-                  }
-                } else {
-                  final result = await Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (context) => AddProductScreen(initialBarcode: scannedCode, preselectedStoreId: ref.read(activeStoreIdProvider), isFastMode: true)),
-                  );
-                  if (result != null && result is String) {
-                    finalBarcodeToAdd = result;
-                  }
-                }
-                if (finalBarcodeToAdd != null) {
-                  final productList = ref.read(productProvider);
-                  final product = productList.where((p) => p.barcode == finalBarcodeToAdd).firstOrNull;
-                  final currentStoreId = ref.read(activeStoreIdProvider);
-                  final history = await ref.read(priceHistoryProvider).getHistoryForProduct(finalBarcodeToAdd);
-                  final storeHistory = currentStoreId != null ? history.where((h) => h.storeId == currentStoreId).firstOrNull : null;
-                  final latestHistory = storeHistory ?? (history.isNotEmpty ? history.first : null);
-                  double price = latestHistory?.price ?? 0.0;
-                  CartItemStatus status = CartItemStatus.ok;
-                  if (currentStoreId != null) {
-                    if (storeHistory == null) status = CartItemStatus.error;
-                    else if (price <= 0) status = CartItemStatus.warning;
-                  }
-                  int qtyToAdd = 1;
-                  if (handled && settings.requireCartConfirmation && mounted) {
-                     final qty = await _askQuantity(context);
-                     if (qty == null) return;
-                     qtyToAdd = qty;
-                  }
-
-                  final newItem = CartItem(
-                    id: const Uuid().v4(),
-                    barcode: finalBarcodeToAdd,
-                    name: product?.name ?? AppStrings.unknownProduct,
-                    price: price,
-                    unitPrice: latestHistory?.unitPrice ?? product?.pricePerKg,
-                    promoType: latestHistory?.promoType,
-                    imageUrl: product?.imageUrl,
-                    status: status,
-                    quantity: qtyToAdd,
-                  );
-                  
-                  ref.read(cartProvider.notifier).addItem(newItem);
-
-                  // [MODIFICA] Rimosso l'attivazione automatica al primo scan per evitare di interrompere l'utente.
-                  // Il dialogo apparirà ora solo premendo il tasto '+' nel carrello.
-                }
+                await _processScannedCode(scannedCode);
               }
             },
           ),
@@ -578,30 +754,39 @@ class _CurrentShoppingScreenState extends ConsumerState<CurrentShoppingScreen> {
   }
 
   /// Gestisce la scansione dei prodotti in omaggio quando scatta la soglia di una promozione.
-  Future<void> _handlePromoScanning(BuildContext context, WidgetRef ref, CartItem parent, PromotionRule rule) async {
+  Future<void> _handlePromoScanning(
+    BuildContext context,
+    WidgetRef ref,
+    CartItem parent,
+    PromotionRule rule,
+  ) async {
     // Quando scatta la soglia, dobbiamo scansionare solo il numero di pezzi omaggio previsti
     final itemsToScan = rule.freeItemsCount;
 
     for (int i = 1; i <= itemsToScan; i++) {
       if (!mounted) return;
 
-      final bool proceed = await showDialog<bool>(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          title: Text(rule.type),
-          content: Text("Ottimo! Hai raggiunto la soglia per l'offerta. Vuoi aggiungere lo stesso prodotto come omaggio o scansionarne uno diverso?"),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, false), 
-              child: const Text('Stesso Prodotto'),
+      final bool proceed =
+          await showDialog<bool>(
+            context: context,
+            builder: (ctx) => AlertDialog(
+              title: Text(rule.type),
+              content: Text(
+                "Ottimo! Hai raggiunto la soglia per l'offerta. Vuoi aggiungere lo stesso prodotto come omaggio o scansionarne uno diverso?",
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx, false),
+                  child: const Text('Stesso Prodotto'),
+                ),
+                ElevatedButton(
+                  onPressed: () => Navigator.pop(ctx, true),
+                  child: const Text('Scansiona Altro'),
+                ),
+              ],
             ),
-            ElevatedButton(
-              onPressed: () => Navigator.pop(ctx, true), 
-              child: const Text('Scansiona Altro'),
-            ),
-          ],
-        ),
-      ) ?? false;
+          ) ??
+          false;
 
       if (!proceed) {
         _addFreeItemFromParent(ref, parent);
@@ -618,107 +803,164 @@ class _CurrentShoppingScreenState extends ConsumerState<CurrentShoppingScreen> {
 
         if (scannedCode != null && mounted) {
           if (scannedCode == parent.barcode) {
-             _addFreeItemFromParent(ref, parent);
-             itemAdded = true;
-             continue;
+            _addFreeItemFromParent(ref, parent);
+            itemAdded = true;
+            continue;
           }
 
           final products = ref.read(productProvider);
-          var product = products.where((p) => p.barcode == scannedCode).firstOrNull;
-          
+          var product = products
+              .where((p) => p.barcode == scannedCode)
+              .firstOrNull;
+
           if (product == null) {
-              final result = await Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => AddProductScreen(initialBarcode: scannedCode, preselectedStoreId: ref.read(activeStoreIdProvider), isFastMode: true)),
-              );
-              
-              final updatedProducts = ref.read(productProvider);
-              product = updatedProducts.where((p) => p.barcode == (result is String ? result : scannedCode)).firstOrNull;
-              
-              if (product == null) {
-                 continue; // Utente ha annullato l'aggiunta
-              }
+            final result = await Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => AddProductScreen(
+                  initialBarcode: scannedCode,
+                  preselectedStoreId: ref.read(activeStoreIdProvider),
+                  isFastMode: true,
+                ),
+              ),
+            );
+
+            final updatedProducts = ref.read(productProvider);
+            product = updatedProducts
+                .where(
+                  (p) => p.barcode == (result is String ? result : scannedCode),
+                )
+                .firstOrNull;
+
+            if (product == null) {
+              continue; // Utente ha annullato l'aggiunta
+            }
           }
 
-          final parentProduct = ref.read(productProvider).where((p) => p.barcode == parent.barcode).firstOrNull;
-          final history = await ref.read(priceHistoryProvider).getHistoryForProduct(scannedCode);
+          final parentProduct = ref
+              .read(productProvider)
+              .where((p) => p.barcode == parent.barcode)
+              .firstOrNull;
+          final history = await ref
+              .read(priceHistoryProvider)
+              .getHistoryForProduct(scannedCode);
           final currentStoreId = ref.read(activeStoreIdProvider);
-          final storeHistory = currentStoreId != null ? history.where((h) => h.storeId == currentStoreId).firstOrNull : null;
-          
+          final storeHistory = currentStoreId != null
+              ? history.where((h) => h.storeId == currentStoreId).firstOrNull
+              : null;
+
           bool isCompatible = false;
           String errorMessage = '';
 
-          final parentNameWords = parentProduct?.name.toLowerCase().split(RegExp(r'\s+')).where((w) => w.length >= 3).toList() ?? [];
-          final productNameWords = product.name.toLowerCase().split(RegExp(r'\s+')).where((w) => w.length >= 3).toList();
-          
+          final parentNameWords =
+              parentProduct?.name
+                  .toLowerCase()
+                  .split(RegExp(r'\s+'))
+                  .where((w) => w.length >= 3)
+                  .toList() ??
+              [];
+          final productNameWords = product.name
+              .toLowerCase()
+              .split(RegExp(r'\s+'))
+              .where((w) => w.length >= 3)
+              .toList();
+
           bool nameMatch = false;
           if (parentNameWords.isNotEmpty && productNameWords.isNotEmpty) {
-             if (parentNameWords.first == productNameWords.first) {
-                 nameMatch = true;
-             }
+            if (parentNameWords.first == productNameWords.first) {
+              nameMatch = true;
+            }
           }
 
           final pBrand = product.brand?.toLowerCase().trim() ?? '';
           final pCat = product.category?.toLowerCase().trim() ?? '';
           final parentBrand = parentProduct?.brand?.toLowerCase().trim() ?? '';
           final parentCat = parentProduct?.category?.toLowerCase().trim() ?? '';
-          
-          bool categoryMatch = pCat.isNotEmpty && parentCat.isNotEmpty && pCat == parentCat;
-          bool brandMatch = pBrand.isNotEmpty && parentBrand.isNotEmpty && pBrand == parentBrand;
-          bool priceMatch = storeHistory != null && storeHistory.price == parent.price;
-          bool promoTypeMatch = storeHistory == null || storeHistory.promoType == parent.promoType;
+
+          bool categoryMatch =
+              pCat.isNotEmpty && parentCat.isNotEmpty && pCat == parentCat;
+          bool brandMatch =
+              pBrand.isNotEmpty &&
+              parentBrand.isNotEmpty &&
+              pBrand == parentBrand;
+          bool priceMatch =
+              storeHistory != null && storeHistory.price == parent.price;
+          bool promoTypeMatch =
+              storeHistory == null ||
+              storeHistory.promoType == parent.promoType;
 
           if (!promoTypeMatch) {
-             errorMessage = 'Il prodotto scansionato non rientra nell\'offerta ${parent.promoType}.';
+            errorMessage =
+                'Il prodotto scansionato non rientra nell\'offerta ${parent.promoType}.';
           } else if (!categoryMatch) {
-             errorMessage = 'La categoria ($pCat) non combacia. I prodotti in promozione devono appartenere alla stessa categoria ($parentCat).';
+            errorMessage =
+                'La categoria ($pCat) non combacia. I prodotti in promozione devono appartenere alla stessa categoria ($parentCat).';
           } else if (!priceMatch && storeHistory != null) {
-             errorMessage = 'Il prezzo base (${storeHistory.price.toStringAsFixed(2)}€) non coincide col prodotto pagante (${parent.price.toStringAsFixed(2)}€).';
+            errorMessage =
+                'Il prezzo base (${storeHistory.price.toStringAsFixed(2)}€) non coincide col prodotto pagante (${parent.price.toStringAsFixed(2)}€).';
           } else if (!nameMatch && !brandMatch) {
-             errorMessage = 'Devono avere la stessa Marca o lo stesso Nome radice per essere combinati nella promo.';
+            errorMessage =
+                'Devono avere la stessa Marca o lo stesso Nome radice per essere combinati nella promo.';
           } else {
-             isCompatible = true;
+            isCompatible = true;
           }
 
           if (isCompatible) {
-             final originalPrice = storeHistory?.price ?? (history.isNotEmpty ? history.first.price : 0.0);
-             ref.read(cartProvider.notifier).addItem(
-               CartItem(
-                 id: const Uuid().v4(),
-                 barcode: product.barcode,
-                 name: product.name,
-                 price: 0.0,
-                 unitPrice: storeHistory?.unitPrice ?? product.pricePerKg,
-                 originalPrice: originalPrice,
-                 isPromoFree: true,
-                 parentId: parent.id,
-                 imageUrl: product.imageUrl,
-                 status: CartItemStatus.ok,
-               )
-             );
-             itemAdded = true;
-             if (mounted) {
-               ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                 content: Text('Prodotto omaggio aggiunto con successo!'),
-                 backgroundColor: Colors.green,
-               ));
-             }
+            final originalPrice =
+                storeHistory?.price ??
+                (history.isNotEmpty ? history.first.price : 0.0);
+            ref
+                .read(cartProvider.notifier)
+                .addItem(
+                  CartItem(
+                    id: const Uuid().v4(),
+                    barcode: product.barcode,
+                    name: product.name,
+                    price: 0.0,
+                    unitPrice: storeHistory?.unitPrice ?? product.pricePerKg,
+                    originalPrice: originalPrice,
+                    isPromoFree: true,
+                    parentId: parent.id,
+                    imageUrl: product.imageUrl,
+                    status: CartItemStatus.ok,
+                  ),
+                );
+            itemAdded = true;
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Prodotto omaggio aggiunto con successo!'),
+                  backgroundColor: Colors.green,
+                ),
+              );
+            }
           } else {
-             final bool retry = await showDialog<bool>(
-               context: context,
-               builder: (ctx) => AlertDialog(
-                 title: const Text('Prodotto non compatibile', style: TextStyle(color: Colors.red)),
-                 content: Text(errorMessage),
-                 actions: [
-                   TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Annulla')),
-                   ElevatedButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Riprova Scansione')),
-                 ]
-               )
-             ) ?? false;
-             
-             if (!retry) {
-               break; // Esce dal while loop ma non aggiunge il prodotto clonato
-             }
+            final bool retry =
+                await showDialog<bool>(
+                  context: context,
+                  builder: (ctx) => AlertDialog(
+                    title: const Text(
+                      'Prodotto non compatibile',
+                      style: TextStyle(color: Colors.red),
+                    ),
+                    content: Text(errorMessage),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(ctx, false),
+                        child: const Text('Annulla'),
+                      ),
+                      ElevatedButton(
+                        onPressed: () => Navigator.pop(ctx, true),
+                        child: const Text('Riprova Scansione'),
+                      ),
+                    ],
+                  ),
+                ) ??
+                false;
+
+            if (!retry) {
+              break; // Esce dal while loop ma non aggiunge il prodotto clonato
+            }
           }
         } else {
           break; // Scanner annullato
@@ -729,19 +971,21 @@ class _CurrentShoppingScreenState extends ConsumerState<CurrentShoppingScreen> {
 
   /// Helper per aggiungere un prodotto in omaggio usando i dati del prodotto genitore (fallback)
   void _addFreeItemFromParent(WidgetRef ref, CartItem parent) {
-    ref.read(cartProvider.notifier).addItem(
-      CartItem(
-        id: const Uuid().v4(),
-        barcode: parent.barcode,
-        name: parent.name,
-        price: 0.0,
-        originalPrice: parent.price,
-        isPromoFree: true,
-        parentId: parent.id,
-        imageUrl: parent.imageUrl,
-        status: CartItemStatus.ok,
-      )
-    );
+    ref
+        .read(cartProvider.notifier)
+        .addItem(
+          CartItem(
+            id: const Uuid().v4(),
+            barcode: parent.barcode,
+            name: parent.name,
+            price: 0.0,
+            originalPrice: parent.price,
+            isPromoFree: true,
+            parentId: parent.id,
+            imageUrl: parent.imageUrl,
+            status: CartItemStatus.ok,
+          ),
+        );
   }
 
   Widget _buildItemLeading(dynamic item) {
@@ -760,29 +1004,47 @@ class _CurrentShoppingScreenState extends ConsumerState<CurrentShoppingScreen> {
         height: 48,
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(8),
-          image: DecorationImage(
-            image: image,
-            fit: BoxFit.cover,
-          ),
+          image: DecorationImage(image: image, fit: BoxFit.cover),
         ),
         child: Align(
           alignment: Alignment.bottomRight,
           child: Container(
             padding: const EdgeInsets.all(2),
-            decoration: const BoxDecoration(color: Colors.white70, shape: BoxShape.circle),
-            child: Text('${item.quantity}x', style: const TextStyle(color: Colors.indigo, fontWeight: FontWeight.bold, fontSize: 10)),
+            decoration: const BoxDecoration(
+              color: Colors.white70,
+              shape: BoxShape.circle,
+            ),
+            child: Text(
+              '${item.quantity}x',
+              style: const TextStyle(
+                color: Colors.indigo,
+                fontWeight: FontWeight.bold,
+                fontSize: 10,
+              ),
+            ),
           ),
         ),
       );
     } else {
       return CircleAvatar(
         backgroundColor: Colors.indigo.shade100,
-        child: Text('${item.quantity}x', style: const TextStyle(color: Colors.indigo, fontWeight: FontWeight.bold, fontSize: 13)),
+        child: Text(
+          '${item.quantity}x',
+          style: const TextStyle(
+            color: Colors.indigo,
+            fontWeight: FontWeight.bold,
+            fontSize: 13,
+          ),
+        ),
       );
     }
   }
 
-  void _showStoreSelector(BuildContext context, WidgetRef ref, List<Store> stores) {
+  void _showStoreSelector(
+    BuildContext context,
+    WidgetRef ref,
+    List<Store> stores,
+  ) {
     showModalBottomSheet(
       context: context,
       builder: (context) {
@@ -793,7 +1055,9 @@ class _CurrentShoppingScreenState extends ConsumerState<CurrentShoppingScreen> {
             return ListTile(
               leading: const Icon(Icons.store),
               title: Text(s.name),
-              trailing: ref.watch(activeStoreIdProvider) == s.id ? const Icon(Icons.check, color: Colors.green) : null,
+              trailing: ref.watch(activeStoreIdProvider) == s.id
+                  ? const Icon(Icons.check, color: Colors.green)
+                  : null,
               onTap: () async {
                 ref.read(activeStoreIdProvider.notifier).setId(s.id);
                 // Aggiorna tutti i prezzi nel carrello
@@ -815,29 +1079,900 @@ class _CurrentShoppingScreenState extends ConsumerState<CurrentShoppingScreen> {
         return StatefulBuilder(
           builder: (context, setState) {
             return AlertDialog(
-              title: const Text('Quantità da associare', style: TextStyle(fontSize: 18, color: Colors.indigo)),
+              title: const Text(
+                'Quantità da associare',
+                style: TextStyle(fontSize: 18, color: Colors.indigo),
+              ),
               content: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 children: [
                   IconButton(
-                    icon: const Icon(Icons.remove_circle_outline, size: 36, color: Colors.red),
+                    icon: const Icon(
+                      Icons.remove_circle_outline,
+                      size: 36,
+                      color: Colors.red,
+                    ),
                     onPressed: qty > 1 ? () => setState(() => qty--) : null,
                   ),
-                  Text('$qty', style: const TextStyle(fontSize: 32, fontWeight: FontWeight.bold)),
+                  Text(
+                    '$qty',
+                    style: const TextStyle(
+                      fontSize: 32,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
                   IconButton(
-                    icon: const Icon(Icons.add_circle_outline, size: 36, color: Colors.green),
+                    icon: const Icon(
+                      Icons.add_circle_outline,
+                      size: 36,
+                      color: Colors.green,
+                    ),
                     onPressed: () => setState(() => qty++),
                   ),
                 ],
               ),
               actions: [
-                TextButton(onPressed: () => Navigator.pop(ctx, null), child: const Text('Annulla')),
-                ElevatedButton(onPressed: () => Navigator.pop(ctx, qty), child: const Text('Aggiungi')),
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx, null),
+                  child: const Text('Annulla'),
+                ),
+                ElevatedButton(
+                  onPressed: () => Navigator.pop(ctx, qty),
+                  child: const Text('Aggiungi'),
+                ),
               ],
             );
+          },
+        );
+      },
+    );
+  }
+
+  Future<void> _processScannedCode(String scannedCode) async {
+    final settings = ref.read(settingsProvider);
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const Center(child: CircularProgressIndicator()),
+    );
+    final gpsFuture = _fetchGpsAndStore(ref);
+    final storeId = await gpsFuture;
+    if (mounted) Navigator.pop(context);
+    final currentStoreId = ref.read(activeStoreIdProvider) ?? storeId;
+    if (currentStoreId != null && ref.read(activeStoreIdProvider) == null) {
+      ref.read(activeStoreIdProvider.notifier).setId(currentStoreId);
+    }
+
+    final isFreshBarcode =
+        scannedCode.length == 13 && scannedCode.startsWith('2');
+    final searchBarcode = isFreshBarcode
+        ? scannedCode.substring(0, 7)
+        : scannedCode;
+
+    double? freshPrice;
+    if (isFreshBarcode) {
+      final priceDigits = scannedCode.substring(7, 12);
+      final parsedPrice = double.tryParse(priceDigits);
+      if (parsedPrice != null && parsedPrice > 0) {
+        freshPrice = parsedPrice / 100.0;
+      }
+    }
+
+    // [SUPERFAST MODE BYPASS CHECK AND FLOW]
+    if (settings.enableSuperfastMode) {
+      final products = ref.read(productProvider);
+      final existingProduct = products
+          .where((p) => p.barcode == searchBarcode)
+          .firstOrNull;
+
+      if (existingProduct != null && currentStoreId != null) {
+        final history = await ref
+            .read(priceHistoryProvider)
+            .getHistoryForProduct(searchBarcode);
+        final storeHistoryToday = history.where((h) {
+          if (h.storeId != currentStoreId) return false;
+          final historyDate = DateTime.fromMillisecondsSinceEpoch(h.timestamp);
+          final now = DateTime.now();
+          return historyDate.year == now.year &&
+              historyDate.month == now.month &&
+              historyDate.day == now.day;
+        }).firstOrNull;
+
+        if (storeHistoryToday != null) {
+          // Bypass! Prodotto acquistato oggi in questo store -> Aggiungi direttamente con lo stesso prezzo
+          double finalPrice = isFreshBarcode
+              ? (freshPrice ?? storeHistoryToday.price)
+              : storeHistoryToday.price;
+          final newItem = CartItem(
+            id: const Uuid().v4(),
+            barcode: searchBarcode,
+            name: existingProduct.name,
+            price: finalPrice,
+            unitPrice:
+                storeHistoryToday.unitPrice ?? existingProduct.pricePerKg,
+            promoType: storeHistoryToday.promoType,
+            imageUrl: existingProduct.imageUrl,
+            status: CartItemStatus.ok,
+            quantity: 1,
+            originalPrice: storeHistoryToday.originalPrice,
+          );
+          ref.read(cartProvider.notifier).addItem(newItem);
+
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Row(
+                  children: [
+                    const Icon(Icons.bolt, color: Colors.amber),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Superfast (Già registrato oggi): ${existingProduct.name}',
+                      ),
+                    ),
+                  ],
+                ),
+                backgroundColor: Colors.indigo,
+                duration: const Duration(seconds: 2),
+              ),
+            );
           }
+          return; // Bypass riuscito
+        }
+      }
+
+      // Altrimenti avvia la procedura superveloce con l'IA
+      if (mounted) {
+        await showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) => SuperFastScanDialog(
+            scannedBarcode: scannedCode,
+            storeId: currentStoreId ?? 'default_store',
+            onCompleted: () {
+              ref.read(productProvider.notifier).loadProducts();
+            },
+          ),
         );
       }
-    );
+      return; // Fine flusso superfast
+    }
+
+    final products = ref.read(productProvider);
+    final existingProduct = products
+        .where((p) => p.barcode == searchBarcode)
+        .firstOrNull;
+    String? finalBarcodeToAdd;
+    bool handled = false;
+
+    if (existingProduct != null) {
+      final currentStoreId = ref.read(activeStoreIdProvider);
+
+      if (currentStoreId != null) {
+        final history = await ref
+            .read(priceHistoryProvider)
+            .getHistoryForProduct(searchBarcode);
+        final storeHistory = history
+            .where((h) => h.storeId == currentStoreId)
+            .firstOrNull;
+
+        if (storeHistory != null) {
+          final historyDate = DateTime.fromMillisecondsSinceEpoch(
+            storeHistory.timestamp,
+          );
+          final now = DateTime.now();
+
+          if (isFreshBarcode) {
+            // Prodotti freschi censiti bypassano la dialog di validazione
+            // e registrano sempre il prezzo dal codice a barre
+            final finalPrice = freshPrice ?? storeHistory.price;
+            await ref
+                .read(priceHistoryProvider)
+                .addPriceHistory(
+                  PriceHistory(
+                    id: const Uuid().v4(),
+                    productBarcode: searchBarcode,
+                    storeId: currentStoreId,
+                    price: finalPrice,
+                    timestamp: now.millisecondsSinceEpoch,
+                    promoType: storeHistory.promoType,
+                    promoValidUntil: storeHistory.promoValidUntil,
+                    originalPrice: storeHistory.originalPrice,
+                  ),
+                );
+            finalBarcodeToAdd = searchBarcode;
+            handled = true;
+          } else {
+            bool isSameDay =
+                historyDate.year == now.year &&
+                historyDate.month == now.month &&
+                historyDate.day == now.day;
+
+            if (!isSameDay) {
+              if (mounted) {
+                final bool? confirmed = await showDialog<bool>(
+                  context: context,
+                  builder: (context) {
+                    final historyDate = DateTime.fromMillisecondsSinceEpoch(
+                      storeHistory.timestamp,
+                    );
+                    final dateStr = DateFormat(
+                      'dd/MM/yyyy HH:mm',
+                    ).format(historyDate);
+
+                    return AlertDialog(
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      title: Row(
+                        children: [
+                          const Icon(Icons.history, color: Colors.indigo),
+                          const SizedBox(width: 10),
+                          const Text(
+                            AppStrings.priceValidationTitle,
+                            style: TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                        ],
+                      ),
+                      content: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Text(
+                            AppStrings.lastPrice,
+                            style: TextStyle(fontSize: 14, color: Colors.grey),
+                          ),
+                          const SizedBox(height: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 20,
+                              vertical: 12,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.indigo.shade50,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: Colors.indigo.shade100),
+                            ),
+                            child: Text(
+                              '€ ${storeHistory.price.toStringAsFixed(2)}',
+                              style: const TextStyle(
+                                fontSize: 32,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.indigo,
+                              ),
+                            ),
+                          ),
+                          if (storeHistory.promoType != null) ...[
+                            const SizedBox(height: 12),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 6,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.orange.shade50,
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(
+                                  color: Colors.orange.shade200,
+                                ),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Icon(
+                                    Icons.local_offer,
+                                    color: Colors.orange,
+                                    size: 16,
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Flexible(
+                                    child: Text(
+                                      'Promo: ${storeHistory.promoType}',
+                                      style: const TextStyle(
+                                        color: Colors.orange,
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 13,
+                                      ),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                          const SizedBox(height: 8),
+                          Text(
+                            'Rilevato il: $dateStr',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontStyle: FontStyle.italic,
+                              color: Colors.grey.shade600,
+                            ),
+                          ),
+                          const SizedBox(height: 24),
+                          Text(
+                            storeHistory.promoType != null
+                                ? "Il prezzo è rimasto lo stesso ed è ancora attiva la promozione?"
+                                : AppStrings.priceValidationQuestion
+                                          .replaceAll('?', '')
+                                          .trim() +
+                                      '?',
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                      ),
+                      actionsPadding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 12,
+                      ),
+                      actions: [
+                        TextButton(
+                          style: TextButton.styleFrom(
+                            foregroundColor: Colors.red,
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 8,
+                            ),
+                          ),
+                          onPressed: () => Navigator.pop(context, false),
+                          child: const Text(
+                            AppStrings.priceChanged,
+                            style: TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                        ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.green,
+                            foregroundColor: Colors.white,
+                            elevation: 2,
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 20,
+                              vertical: 8,
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                          ),
+                          onPressed: () => Navigator.pop(context, true),
+                          child: const Text(
+                            AppStrings.priceConfirmed,
+                            style: TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                      ],
+                    );
+                  },
+                );
+
+                if (confirmed == true) {
+                  DateTime? newPromoValidUntil = storeHistory.promoValidUntil != null 
+                      ? DateTime.fromMillisecondsSinceEpoch(storeHistory.promoValidUntil!) 
+                      : null;
+                  
+                  if (storeHistory.promoType != null && ref.read(settingsProvider).autoExtendPromos) {
+                    final defaultDays = ref.read(settingsProvider).defaultPromoDuration;
+                    newPromoValidUntil = now.add(Duration(days: defaultDays));
+                    
+                    final promos = ref.read(promotionProvider);
+                    final existingPromo = promos.where((p) => p.storeId == currentStoreId && p.name == storeHistory.promoType).firstOrNull;
+                    if (existingPromo != null) {
+                      final updatedPromo = existingPromo.copyWith(validUntil: newPromoValidUntil);
+                      await ref.read(promotionProvider.notifier).updatePromotion(updatedPromo);
+                    }
+                  }
+
+                  await ref
+                      .read(priceHistoryProvider)
+                      .addPriceHistory(
+                        PriceHistory(
+                          id: const Uuid().v4(),
+                          productBarcode: searchBarcode,
+                          storeId: currentStoreId,
+                          price: storeHistory.price,
+                          timestamp: now.millisecondsSinceEpoch,
+                          promoType: storeHistory.promoType,
+                          promoValidUntil: newPromoValidUntil?.millisecondsSinceEpoch,
+                          originalPrice: storeHistory.originalPrice,
+                        ),
+                      );
+                  finalBarcodeToAdd = searchBarcode;
+                  handled = true;
+                } else if (confirmed == false) {
+                  // Leave handled = false to trigger AddProductScreen below
+                } else {
+                  handled = true; // Dismissed
+                }
+              } else {
+                handled = true;
+              }
+            } else {
+              // Already checked today
+              finalBarcodeToAdd = searchBarcode;
+              handled = true;
+            }
+          }
+        }
+      }
+    }
+
+    if (!handled) {
+      if (mounted) {
+        final result = await Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => AddProductScreen(
+              initialBarcode: scannedCode,
+              preselectedStoreId: currentStoreId,
+              isFastMode: true,
+            ),
+          ),
+        );
+        if (result != null && result is String) {
+          finalBarcodeToAdd = result;
+        }
+      }
+    }
+
+    if (finalBarcodeToAdd != null && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '${AppStrings.addedSuccess} ${existingProduct?.name ?? ''}',
+          ),
+          backgroundColor: Colors.green,
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    }
+
+    if (finalBarcodeToAdd != null) {
+      final productList = ref.read(productProvider);
+      final product = productList
+          .where((p) => p.barcode == finalBarcodeToAdd)
+          .firstOrNull;
+      final currentStoreId = ref.read(activeStoreIdProvider);
+      final history = await ref
+          .read(priceHistoryProvider)
+          .getHistoryForProduct(finalBarcodeToAdd);
+      final storeHistory = currentStoreId != null
+          ? history.where((h) => h.storeId == currentStoreId).firstOrNull
+          : null;
+      final latestHistory =
+          storeHistory ?? (history.isNotEmpty ? history.first : null);
+
+      double price = (isFreshBarcode && freshPrice != null)
+          ? freshPrice
+          : (latestHistory?.price ?? 0.0);
+
+      CartItemStatus status = CartItemStatus.ok;
+      if (currentStoreId != null) {
+        if (storeHistory == null)
+          status = CartItemStatus.error;
+        else if (price <= 0)
+          status = CartItemStatus.warning;
+      }
+      int qtyToAdd = 1;
+      if (handled && settings.requireCartConfirmation && mounted) {
+        final qty = await _askQuantity(context);
+        if (qty == null) return;
+        qtyToAdd = qty;
+      }
+
+      final newItem = CartItem(
+        id: const Uuid().v4(),
+        barcode: finalBarcodeToAdd,
+        name: product?.name ?? AppStrings.unknownProduct,
+        price: price,
+        unitPrice: latestHistory?.unitPrice ?? product?.pricePerKg,
+        promoType: latestHistory?.promoType,
+        imageUrl: product?.imageUrl,
+        status: status,
+        quantity: qtyToAdd,
+        originalPrice: latestHistory?.originalPrice,
+      );
+
+      ref.read(cartProvider.notifier).addItem(newItem);
+    }
+  }
+
+  Future<void> _promptToScanSuggestedProduct(Product product) async {
+    final isFresh =
+        product.barcode.length == 7 && product.barcode.startsWith('2');
+
+    if (isFresh) {
+      await showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: Row(
+            children: [
+              const Icon(Icons.qr_code_scanner, color: Colors.indigo),
+              const SizedBox(width: 10),
+              const Text(
+                'Scansione Richiesta',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Trattandosi di un prodotto fresco ("${product.name}"), è necessario scansionare il codice a barre stampato sulla bilancia per calcolare il peso e il prezzo corretti.',
+                style: const TextStyle(fontSize: 16),
+              ),
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: Colors.orange.shade50,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: Colors.orange.shade200),
+                ),
+                child: const Row(
+                  children: [
+                    Icon(Icons.scale, color: Colors.orange),
+                    SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Il codice a barre della bilancia contiene le informazioni sul peso ed il prezzo effettivo.',
+                        style: TextStyle(
+                          color: Colors.orange,
+                          fontSize: 13,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Annulla'),
+            ),
+            ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.indigo,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+              onPressed: () async {
+                Navigator.pop(context); // Chiude il dialogo informativo
+
+                // Avvia lo scanner
+                final String? scannedCode = await Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const BarcodeScannerScreen(),
+                  ),
+                );
+
+                if (scannedCode != null) {
+                  // Verifichiamo se il codice corrisponde
+                  final isFreshBarcode =
+                      scannedCode.length == 13 && scannedCode.startsWith('2');
+                  final searchBarcode = isFreshBarcode
+                      ? scannedCode.substring(0, 7)
+                      : scannedCode;
+
+                  if (searchBarcode == product.barcode) {
+                    // Corrispondenza esatta! Procedi alla scansione
+                    await _processScannedCode(scannedCode);
+                  } else {
+                    // Codice scansionato diverso! Chiedi conferma
+                    final products = ref.read(productProvider);
+                    final scannedProduct = products
+                        .where((p) => p.barcode == searchBarcode)
+                        .firstOrNull;
+                    final scannedProductName =
+                        scannedProduct?.name ?? 'Nuovo Prodotto';
+
+                    if (mounted) {
+                      final bool? proceed = await showDialog<bool>(
+                        context: context,
+                        builder: (context) => AlertDialog(
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          title: Row(
+                            children: [
+                              const Icon(
+                                Icons.warning_amber_rounded,
+                                color: Colors.orange,
+                              ),
+                              const SizedBox(width: 10),
+                              const Text('Prodotto Diverso'),
+                            ],
+                          ),
+                          content: Text(
+                            'Hai scansionato "$scannedProductName" invece del prodotto consigliato "${product.name}".\n\nVuoi comunque aggiungere il prodotto scansionato?',
+                          ),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.pop(context, false),
+                              child: const Text('Annulla'),
+                            ),
+                            ElevatedButton(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.orange,
+                                foregroundColor: Colors.white,
+                              ),
+                              onPressed: () => Navigator.pop(context, true),
+                              child: const Text('Aggiungi Scansionato'),
+                            ),
+                          ],
+                        ),
+                      );
+
+                      if (proceed == true) {
+                        await _processScannedCode(scannedCode);
+                      }
+                    }
+                  }
+                }
+              },
+              icon: const Icon(Icons.qr_code_scanner),
+              label: const Text('Scansiona Ora'),
+            ),
+          ],
+        ),
+      );
+    } else {
+      // Per gli altri prodotti: mostrare cosa si sta aggiungendo (Nome, Marca, Peso, Codice a Barre)
+      // e chiedere solo se il prezzo è quello inserito in precedenza o no
+      final history = await ref
+          .read(priceHistoryProvider)
+          .getHistoryForProduct(product.barcode);
+      final currentStoreId = ref.read(activeStoreIdProvider);
+      final storeHistory = currentStoreId != null
+          ? history.where((h) => h.storeId == currentStoreId).firstOrNull
+          : null;
+
+      if (!mounted) return;
+
+      if (storeHistory == null) {
+        // Se il prodotto non è mai stato censito nel negozio attuale, chiede direttamente l'inserimento del prezzo
+        final result = await Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => AddProductScreen(
+              initialBarcode: product.barcode,
+              preselectedStoreId: currentStoreId,
+              isFastMode: true,
+            ),
+          ),
+        );
+        if (result != null && result is String) {
+          await _processScannedCode(result);
+        }
+        return;
+      }
+
+      final previousPrice = storeHistory.price;
+
+      await showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: Row(
+            children: [
+              const Icon(Icons.info_outline, color: Colors.indigo),
+              const SizedBox(width: 10),
+              const Text(
+                'Conferma Prezzo',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Stai aggiungendo il seguente prodotto:',
+                style: TextStyle(fontSize: 14, color: Colors.grey),
+              ),
+              const SizedBox(height: 12),
+              // Scheda Prodotto Premium con dettagli
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.indigo.shade50,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.indigo.shade100),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      product.name,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                        color: Colors.indigo,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    if (product.brand != null && product.brand!.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 4.0),
+                        child: Row(
+                          children: [
+                            const Text(
+                              'Marca: ',
+                              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                            ),
+                            Text(
+                              product.brand!,
+                              style: const TextStyle(fontSize: 13),
+                            ),
+                          ],
+                        ),
+                      ),
+                    if (product.weight != null)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 4.0),
+                        child: Row(
+                          children: [
+                            const Text(
+                              'Peso: ',
+                              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                            ),
+                            Text(
+                              '${product.weight} ${product.weightUnit ?? ''}',
+                              style: const TextStyle(fontSize: 13),
+                            ),
+                          ],
+                        ),
+                      ),
+                    Row(
+                      children: [
+                        const Text(
+                          'Codice: ',
+                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                        ),
+                        Text(
+                          product.barcode,
+                          style: const TextStyle(fontSize: 13, fontStyle: FontStyle.italic),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'Il prezzo del prodotto è lo stesso precedentemente inserito?',
+                style: TextStyle(color: Colors.grey.shade800, fontSize: 15, fontWeight: FontWeight.w500),
+              ),
+              const SizedBox(height: 12),
+              Center(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: Colors.green.shade50,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.green.shade200),
+                  ),
+                  child: Text(
+                    '€ ${previousPrice.toStringAsFixed(2)}',
+                    style: TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.green.shade800,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Annulla'),
+            ),
+            TextButton(
+              style: TextButton.styleFrom(foregroundColor: Colors.red),
+              onPressed: () async {
+                Navigator.pop(context); // Chiude il dialogo attuale
+                // Prezzo cambiato! Chiedi il nuovo prezzo o apri la schermata AddProductScreen
+                if (mounted) {
+                  final result = await Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => AddProductScreen(
+                        initialBarcode: product.barcode,
+                        preselectedStoreId: currentStoreId,
+                        isFastMode: true,
+                      ),
+                    ),
+                  );
+                  if (result != null && result is String) {
+                    await _processScannedCode(result);
+                  }
+                }
+              },
+              child: const Text('No, è cambiato'),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.green,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+              onPressed: () async {
+                Navigator.pop(context); // Chiude il dialogo
+                
+                // Aggiunge direttamente al carrello con il prezzo confermato
+                final now = DateTime.now();
+                if (currentStoreId != null) {
+                  await ref.read(priceHistoryProvider).addPriceHistory(
+                    PriceHistory(
+                      id: const Uuid().v4(),
+                      productBarcode: product.barcode,
+                      storeId: currentStoreId,
+                      price: previousPrice,
+                      timestamp: now.millisecondsSinceEpoch,
+                      promoType: storeHistory?.promoType,
+                      promoValidUntil: storeHistory?.promoValidUntil,
+                      originalPrice: storeHistory?.originalPrice,
+                    ),
+                  );
+                }
+
+                // Aggiungi al carrello
+                final settings = ref.read(settingsProvider);
+                int qtyToAdd = 1;
+                if (settings.requireCartConfirmation && mounted) {
+                  final qty = await _askQuantity(context);
+                  if (qty == null) return;
+                  qtyToAdd = qty;
+                }
+
+                final newItem = CartItem(
+                  id: const Uuid().v4(),
+                  barcode: product.barcode,
+                  name: product.name,
+                  price: previousPrice,
+                  unitPrice: storeHistory?.unitPrice ?? product.pricePerKg,
+                  promoType: storeHistory?.promoType,
+                  imageUrl: product.imageUrl,
+                  status: (currentStoreId != null && storeHistory == null)
+                      ? CartItemStatus.error
+                      : (previousPrice <= 0 ? CartItemStatus.warning : CartItemStatus.ok),
+                  quantity: qtyToAdd,
+                  originalPrice: storeHistory?.originalPrice,
+                );
+
+                ref.read(cartProvider.notifier).addItem(newItem);
+
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('${AppStrings.addedSuccess} ${product.name}'),
+                      backgroundColor: Colors.green,
+                      duration: const Duration(seconds: 2),
+                    ),
+                  );
+                }
+              },
+              child: const Text('Sì, conferma'),
+            ),
+          ],
+        ),
+      );
+    }
   }
 }

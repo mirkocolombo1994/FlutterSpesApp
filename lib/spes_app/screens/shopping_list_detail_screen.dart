@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'dart:io';
 import 'package:uuid/uuid.dart';
+import '../services/prediction_engine.dart';
+import '../widgets/ai_suggestions_carousel.dart';
 import '../models/shopping_list.dart';
 import '../models/shopping_list_item.dart';
 import '../models/product.dart';
@@ -231,6 +233,36 @@ class _ShoppingListDetailScreenState extends ConsumerState<ShoppingListDetailScr
         title: Text(widget.shoppingList.name),
         actions: [
           IconButton(
+            tooltip: 'Autopopola con IA',
+            icon: const Icon(Icons.psychology, color: Colors.indigo),
+            onPressed: () async {
+              final count = await ref
+                  .read(shoppingListItemServiceProvider)
+                  .autopopulateListWithAI(widget.shoppingList.id);
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Row(
+                      children: [
+                        const Icon(Icons.check_circle, color: Colors.white),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            count > 0
+                                ? 'Autopopolamento completato! Aggiunti $count articoli consigliati.'
+                                : 'La tua lista è già aggiornata con tutti gli articoli consigliati!',
+                          ),
+                        ),
+                      ],
+                    ),
+                    backgroundColor: Colors.indigo,
+                    duration: const Duration(seconds: 3),
+                  ),
+                );
+              }
+            },
+          ),
+          IconButton(
             icon: const Icon(Icons.qr_code_scanner),
             onPressed: _scanToAddProduct,
           ),
@@ -239,7 +271,61 @@ class _ShoppingListDetailScreenState extends ConsumerState<ShoppingListDetailScr
       body: itemsAsyncValue.when(
         data: (items) {
           if (items.isEmpty) {
-            return const Center(child: Text('Nessun prodotto. Scansiona per aggiungere.'));
+            return Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Spacer(),
+                const Icon(Icons.playlist_add, size: 64, color: Colors.grey),
+                const SizedBox(height: 16),
+                const Text(
+                  'Nessun prodotto in questa lista.\nScansiona o usa l\'autopopolamento IA!',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 16, color: Colors.grey),
+                ),
+                const SizedBox(height: 24),
+                ElevatedButton.icon(
+                  onPressed: () async {
+                    final count = await ref
+                        .read(shoppingListItemServiceProvider)
+                        .autopopulateListWithAI(widget.shoppingList.id);
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('Aggiunti $count articoli consigliati per te!'),
+                          backgroundColor: Colors.indigo,
+                        ),
+                      );
+                    }
+                  },
+                  icon: const Icon(Icons.psychology, color: Colors.white),
+                  label: const Text('Autopopola Lista con l\'IA'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.indigo,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 20,
+                      vertical: 12,
+                    ),
+                  ),
+                ),
+                const Spacer(),
+                AiSuggestionsCarousel(
+                  storeId: widget.shoppingList.storeId,
+                  onAdd: (product) async {
+                    final item = ShoppingListItem(
+                      id: const Uuid().v4(),
+                      listId: widget.shoppingList.id,
+                      productBarcode: product.barcode,
+                      quantity: 1,
+                    );
+                    await ref.read(shoppingListItemServiceProvider).addItem(item);
+                  },
+                ),
+              ],
+            );
           }
 
           return FutureBuilder<Map<String, dynamic>>(
@@ -282,6 +368,18 @@ class _ShoppingListDetailScreenState extends ConsumerState<ShoppingListDetailScr
                         },
                       ),
                     ),
+                    AiSuggestionsCarousel(
+                      storeId: widget.shoppingList.storeId,
+                      onAdd: (product) async {
+                        final item = ShoppingListItem(
+                          id: const Uuid().v4(),
+                          listId: widget.shoppingList.id,
+                          productBarcode: product.barcode,
+                          quantity: 1,
+                        );
+                        await ref.read(shoppingListItemServiceProvider).addItem(item);
+                      },
+                    ),
                     _buildTotalBar(total),
                   ],
                 );
@@ -300,6 +398,18 @@ class _ShoppingListDetailScreenState extends ConsumerState<ShoppingListDetailScr
                       },
                     ),
                   ),
+                  AiSuggestionsCarousel(
+                    storeId: widget.shoppingList.storeId,
+                    onAdd: (product) async {
+                      final item = ShoppingListItem(
+                        id: const Uuid().v4(),
+                        listId: widget.shoppingList.id,
+                        productBarcode: product.barcode,
+                        quantity: 1,
+                      );
+                      await ref.read(shoppingListItemServiceProvider).addItem(item);
+                    },
+                  ),
                   _buildTotalBar(total),
                 ],
               );
@@ -314,16 +424,66 @@ class _ShoppingListDetailScreenState extends ConsumerState<ShoppingListDetailScr
 
   Widget _buildTotalBar(double total) {
     return Container(
-      padding: const EdgeInsets.all(16),
-      color: Colors.indigo.shade50,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: Colors.indigo.shade50,
+        border: Border(
+          top: BorderSide(color: Colors.indigo.shade100, width: 2),
+        ),
+      ),
       child: SafeArea(
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            const Text('Totale Previsto:', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-            Text(
-              '€${total.toStringAsFixed(2)}',
-              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.green),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text(
+                  'Totale Parziale (prezzi noti):',
+                  style: TextStyle(fontSize: 13, color: Colors.black54),
+                ),
+                Text(
+                  '€${total.toStringAsFixed(2)}',
+                  style: const TextStyle(fontSize: 13, color: Colors.black87),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            FutureBuilder<double>(
+              future: PredictionEngine.instance.estimateListBudget(
+                widget.shoppingList.id,
+                widget.shoppingList.storeId ?? 'default_store',
+              ),
+              builder: (context, snapshot) {
+                final budget = snapshot.data ?? total;
+                return Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(Icons.psychology, size: 18, color: Colors.indigo.shade700),
+                        const SizedBox(width: 6),
+                        const Text(
+                          'Stima Budget IA:',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.indigo,
+                          ),
+                        ),
+                      ],
+                    ),
+                    Text(
+                      '€${budget.toStringAsFixed(2)}',
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.green,
+                      ),
+                    ),
+                  ],
+                );
+              },
             ),
           ],
         ),

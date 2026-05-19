@@ -9,6 +9,11 @@ class SettingsState {
   final bool requireCartConfirmation;
   final bool showCartWarnings;
   final bool enableDataSaver;
+  final bool enableSuperfastMode;
+  final String geminiApiKey;
+  final int defaultPromoDuration;
+  final bool autoExtendPromos;
+  final bool autoCleanExpiredPromos;
 
   SettingsState({
     required this.themeMode,
@@ -17,6 +22,11 @@ class SettingsState {
     required this.requireCartConfirmation,
     required this.showCartWarnings,
     required this.enableDataSaver,
+    required this.enableSuperfastMode,
+    required this.geminiApiKey,
+    required this.defaultPromoDuration,
+    required this.autoExtendPromos,
+    required this.autoCleanExpiredPromos,
   });
 
   SettingsState copyWith({
@@ -26,6 +36,11 @@ class SettingsState {
     bool? requireCartConfirmation,
     bool? showCartWarnings,
     bool? enableDataSaver,
+    bool? enableSuperfastMode,
+    String? geminiApiKey,
+    int? defaultPromoDuration,
+    bool? autoExtendPromos,
+    bool? autoCleanExpiredPromos,
   }) {
     return SettingsState(
       themeMode: themeMode ?? this.themeMode,
@@ -34,6 +49,11 @@ class SettingsState {
       requireCartConfirmation: requireCartConfirmation ?? this.requireCartConfirmation,
       showCartWarnings: showCartWarnings ?? this.showCartWarnings,
       enableDataSaver: enableDataSaver ?? this.enableDataSaver,
+      enableSuperfastMode: enableSuperfastMode ?? this.enableSuperfastMode,
+      geminiApiKey: geminiApiKey ?? this.geminiApiKey,
+      defaultPromoDuration: defaultPromoDuration ?? this.defaultPromoDuration,
+      autoExtendPromos: autoExtendPromos ?? this.autoExtendPromos,
+      autoCleanExpiredPromos: autoCleanExpiredPromos ?? this.autoCleanExpiredPromos,
     );
   }
 }
@@ -45,6 +65,11 @@ class SettingsNotifier extends Notifier<SettingsState> {
   static const String _confirmKey = 'require_cart_confirmation';
   static const String _warnKey = 'show_cart_warnings';
   static const String _dataSaverKey = 'enable_data_saver';
+  static const String _superfastKey = 'enable_superfast_mode';
+  static const String _geminiKey = 'gemini_api_key';
+  static const String _promoDurationKey = 'default_promo_duration';
+  static const String _autoExtendPromoKey = 'auto_extend_promos';
+  static const String _autoCleanPromoKey = 'auto_clean_promos';
 
   @override
   SettingsState build() {
@@ -56,6 +81,11 @@ class SettingsNotifier extends Notifier<SettingsState> {
       requireCartConfirmation: false,
       showCartWarnings: true,
       enableDataSaver: false,
+      enableSuperfastMode: false,
+      geminiApiKey: '',
+      defaultPromoDuration: 14,
+      autoExtendPromos: true,
+      autoCleanExpiredPromos: true,
     );
   }
 
@@ -67,6 +97,11 @@ class SettingsNotifier extends Notifier<SettingsState> {
     final confirm = prefs.getBool(_confirmKey) ?? false;
     final warn = prefs.getBool(_warnKey) ?? true;
     final dataSaver = prefs.getBool(_dataSaverKey) ?? false;
+    final superfast = prefs.getBool(_superfastKey) ?? false;
+    final geminiKey = prefs.getString(_geminiKey) ?? '';
+    final promoDuration = prefs.getInt(_promoDurationKey) ?? 14;
+    final autoExtend = prefs.getBool(_autoExtendPromoKey) ?? true;
+    final autoClean = prefs.getBool(_autoCleanPromoKey) ?? true;
     
     state = state.copyWith(
       themeMode: ThemeMode.values[themeIndex],
@@ -75,6 +110,11 @@ class SettingsNotifier extends Notifier<SettingsState> {
       requireCartConfirmation: confirm,
       showCartWarnings: warn,
       enableDataSaver: dataSaver,
+      enableSuperfastMode: superfast,
+      geminiApiKey: geminiKey,
+      defaultPromoDuration: promoDuration,
+      autoExtendPromos: autoExtend,
+      autoCleanExpiredPromos: autoClean,
     );
   }
 
@@ -112,6 +152,36 @@ class SettingsNotifier extends Notifier<SettingsState> {
     state = state.copyWith(enableDataSaver: value);
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_dataSaverKey, value);
+  }
+
+  Future<void> setEnableSuperfastMode(bool value) async {
+    state = state.copyWith(enableSuperfastMode: value);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_superfastKey, value);
+  }
+
+  Future<void> setGeminiApiKey(String value) async {
+    state = state.copyWith(geminiApiKey: value);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_geminiKey, value);
+  }
+
+  Future<void> setDefaultPromoDuration(int days) async {
+    state = state.copyWith(defaultPromoDuration: days);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_promoDurationKey, days);
+  }
+
+  Future<void> setAutoExtendPromos(bool value) async {
+    state = state.copyWith(autoExtendPromos: value);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_autoExtendPromoKey, value);
+  }
+
+  Future<void> setAutoCleanExpiredPromos(bool value) async {
+    state = state.copyWith(autoCleanExpiredPromos: value);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_autoCleanPromoKey, value);
   }
 }
 

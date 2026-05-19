@@ -71,6 +71,41 @@ class SettingsScreen extends ConsumerWidget {
             onChanged: (val) => ref.read(settingsProvider.notifier).setShowCartWarnings(val),
           ),
           const Divider(),
+          _buildSectionHeader('Motore Promozionale'),
+          ListTile(
+            leading: const Icon(Icons.timer, color: Colors.indigo),
+            title: const Text('Durata Promozioni'),
+            subtitle: const Text('Durata predefinita (se non specificata)'),
+            trailing: DropdownButton<int>(
+              value: settings.defaultPromoDuration,
+              items: [7, 14, 21, 30].map((int value) {
+                return DropdownMenuItem<int>(
+                  value: value,
+                  child: Text('$value giorni'),
+                );
+              }).toList(),
+              onChanged: (newValue) {
+                if (newValue != null) {
+                  ref.read(settingsProvider.notifier).setDefaultPromoDuration(newValue);
+                }
+              },
+            ),
+          ),
+          SwitchListTile(
+            title: const Text('Auto-Estensione Promozioni'),
+            subtitle: const Text('Prolunga automaticamente se il prezzo è confermato in cassa'),
+            secondary: const Icon(Icons.auto_graph, color: Colors.indigo),
+            value: settings.autoExtendPromos,
+            onChanged: (val) => ref.read(settingsProvider.notifier).setAutoExtendPromos(val),
+          ),
+          SwitchListTile(
+            title: const Text('Pulizia Automatica'),
+            subtitle: const Text('Elimina all\'avvio le promozioni scadute da oltre 30 giorni'),
+            secondary: const Icon(Icons.cleaning_services, color: Colors.indigo),
+            value: settings.autoCleanExpiredPromos,
+            onChanged: (val) => ref.read(settingsProvider.notifier).setAutoCleanExpiredPromos(val),
+          ),
+          const Divider(),
           _buildSectionHeader('Cloud e Dati'),
           SwitchListTile(
             title: const Text('Risparmio Dati (Open Food Facts)'),
@@ -78,6 +113,26 @@ class SettingsScreen extends ConsumerWidget {
             secondary: const Icon(Icons.data_saver_on, color: Colors.indigo),
             value: settings.enableDataSaver,
             onChanged: (val) => ref.read(settingsProvider.notifier).setEnableDataSaver(val),
+          ),
+          const Divider(),
+          _buildSectionHeader(AppStrings.aiSectionTitle),
+          SwitchListTile(
+            title: const Text(AppStrings.superfastModeLabel),
+            subtitle: const Text(AppStrings.superfastModeDesc),
+            secondary: const Icon(Icons.bolt, color: Colors.indigo),
+            value: settings.enableSuperfastMode,
+            onChanged: (val) => ref.read(settingsProvider.notifier).setEnableSuperfastMode(val),
+          ),
+          ListTile(
+            leading: const Icon(Icons.vpn_key, color: Colors.indigo),
+            title: const Text(AppStrings.geminiApiKeyLabel),
+            subtitle: Text(
+              settings.geminiApiKey.isEmpty
+                  ? AppStrings.geminiApiKeyDesc
+                  : 'Chiave salvata: ••••••••••••••••',
+            ),
+            trailing: const Icon(Icons.edit, color: Colors.indigo),
+            onTap: () => _showApiKeyDialog(context, ref, settings.geminiApiKey),
           ),
           const Divider(),
           _buildSectionHeader(AppStrings.aboutAppLabel),
@@ -103,6 +158,58 @@ class SettingsScreen extends ConsumerWidget {
           ),
         ],
       ),
+    );
+  }
+
+  void _showApiKeyDialog(BuildContext context, WidgetRef ref, String currentKey) {
+    final controller = TextEditingController(text: currentKey);
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: const Row(
+            children: [
+              Icon(Icons.vpn_key, color: Colors.indigo),
+              SizedBox(width: 10),
+              Text(AppStrings.geminiApiKeyLabel),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'Per abilitare il riconoscimento dell\'immagine con l\'IA di Google Gemini, inserisci la tua chiave API (gratuita e privata).',
+                style: TextStyle(fontSize: 14),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: controller,
+                decoration: const InputDecoration(
+                  labelText: 'Chiave API Gemini',
+                  border: OutlineInputBorder(),
+                  hintText: 'AIzaSy...',
+                ),
+                obscureText: true,
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text(AppStrings.cancel),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                ref.read(settingsProvider.notifier).setGeminiApiKey(controller.text.trim());
+                Navigator.pop(context);
+              },
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.indigo, foregroundColor: Colors.white),
+              child: const Text(AppStrings.save),
+            ),
+          ],
+        );
+      },
     );
   }
 

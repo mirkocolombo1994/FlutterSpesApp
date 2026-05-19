@@ -1,7 +1,9 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:uuid/uuid.dart';
 import '../models/shopping_list.dart';
 import '../models/shopping_list_item.dart';
 import '../services/spes_app_database_helper.dart';
+import '../services/prediction_engine.dart';
 
 // Provider per le liste della spesa
 final shoppingListProvider = NotifierProvider<ShoppingListNotifier, List<ShoppingList>>(() {
@@ -74,5 +76,34 @@ class ShoppingListItemService {
   Future<void> deleteItem(ShoppingListItem item) async {
     await SpesAppDatabaseHelper.instance.deleteShoppingListItem(item.id);
     ref.invalidate(shoppingListItemsProvider(item.listId));
+  }
+
+  /// Autopopola la lista con i prodotti suggeriti per il riacquisto calcolati dall'IA
+  Future<int> autopopulateListWithAI(String listId) async {
+    final suggestions = await PredictionEngine.instance.getReplenishmentSuggestions();
+    int addedCount = 0;
+
+    // Recupera gli elementi attualmente in lista per evitare duplicati
+    final currentItems = await SpesAppDatabaseHelper.instance.getShoppingListItems(listId);
+    final currentBarcodes = currentItems.map((i) => i.productBarcode).toSet();
+
+    for (final product in suggestions) {
+      if (!currentBarcodes.contains(product.barcode)) {
+        final item = ShoppingListItem(
+          id: const Uuid().v4(),
+          listId: listId,
+          productBarcode: product.barcode,
+          quantity: 1,
+          isChecked: false,
+        );
+        await SpesAppDatabaseHelper.instance.insertShoppingListItem(item);
+        addedCount++;
+      }
+    }
+
+    if (addedCount > 0) {
+      ref.invalidate(shoppingListItemsProvider(listId));
+    }
+    return addedCount;
   }
 }
