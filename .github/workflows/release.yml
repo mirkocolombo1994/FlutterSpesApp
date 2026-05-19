@@ -1,0 +1,42 @@
+name: Auto Merge & Release SpesApp
+
+on:
+  push:
+    tags:
+      - 'v*' # Si attiva quando viene pushato un tag come v0.5.0
+
+jobs:
+  merge-and-release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0 # Ottiene tutta la cronologia Git
+
+      # 1. Configurazione Git
+      - name: Configure Git
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
+      # 2. Merge di develop su main (Fast-Forward)
+      - name: Merge develop into main
+        run: |
+          git checkout main
+          git pull origin main
+          git merge origin/develop --ff-only
+          git push origin main
+
+      # 3. Creazione Release su GitHub
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: Release ${{ github.ref_name }}
+          draft: false
+          prerelease: false
+          generate_release_notes: true
