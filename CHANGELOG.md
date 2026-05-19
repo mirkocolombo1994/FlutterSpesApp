@@ -1,5 +1,59 @@
 # Registro delle Modifiche (Changelog)
 
+## [0.5.0](https://github.com/mirkocolombo1994/FlutterSpesApp/compare/v0.3.0...v0.5.0) (2026-05-19)
+
+
+### ⚙️ Manutenzione
+
+* bump version to 0.4.0+7 and update changelog ([2fcec28](https://github.com/mirkocolombo1994/FlutterSpesApp/commit/2fcec28e23021dd74e53b99dc53b9d7c36c3a30a))
+
+
+### 📚 Documentazione
+
+* publishing instructions ([fa38e79](https://github.com/mirkocolombo1994/FlutterSpesApp/commit/fa38e79d1e788ac73283b25c25965ed4a870b42c))
+* release procedure ([539193d](https://github.com/mirkocolombo1994/FlutterSpesApp/commit/539193d5c3d7f330bce5c6181e88227401185b5e))
+
+
+### 💄 Stile e UI
+
+* added barcode visualization in add_product_screen ([2048c34](https://github.com/mirkocolombo1994/FlutterSpesApp/commit/2048c34c20d4a891dab4f9b7915d7d86afec3b33))
+* added price per items and reduced delete item button ([b8711d0](https://github.com/mirkocolombo1994/FlutterSpesApp/commit/b8711d0497abdaf389348e51f04ed6350a3a2e17))
+* already registered price kart screen ([97a3728](https://github.com/mirkocolombo1994/FlutterSpesApp/commit/97a37285f5dd1fd2386191e98d176a19767bc110))
+* moved remove item kart screen ([dea797d](https://github.com/mirkocolombo1994/FlutterSpesApp/commit/dea797d46fbfd44e7027cf8ae4acadc10330e50c))
+
+
+### 🐛 Bug Fixes
+
+* (ai) exclude active cart items from suggestions and enforce rescanning for suggested items ([c110789](https://github.com/mirkocolombo1994/FlutterSpesApp/commit/c1107892b1df750e81675c965fa4ce51678eb2f7))
+* (ai) open price editor directly when product has no price in current store ([3779d6c](https://github.com/mirkocolombo1994/FlutterSpesApp/commit/3779d6c05e5d03cd0473f5f33f3041bc47e8b17c))
+* (ai) require scan for fresh products and confirm price for others ([d0f18c4](https://github.com/mirkocolombo1994/FlutterSpesApp/commit/d0f18c4bcd20cc5b3f8475f85e200451868e9880))
+* add promo product ([ad9b3be](https://github.com/mirkocolombo1994/FlutterSpesApp/commit/ad9b3be0a3410688e2fd9949e2549d738aa5c382))
+* add promo product and correct labels ([8823874](https://github.com/mirkocolombo1994/FlutterSpesApp/commit/8823874f185bc7f23abe42cffa5bf69fee9edc74))
+* add store when adding a price ([407632d](https://github.com/mirkocolombo1994/FlutterSpesApp/commit/407632d2b2e7e94186cffd53595281c4ae05ab2a))
+* deleting promo ([0e44889](https://github.com/mirkocolombo1994/FlutterSpesApp/commit/0e44889b98eb6bfe0e2b3ba5a4701b071bc1ab2e))
+* fix weight conversion from OFF ([b2f0798](https://github.com/mirkocolombo1994/FlutterSpesApp/commit/b2f07981bd6dfbde8b99feefed44a17645471033))
+* missing impots ([3b3d33e](https://github.com/mirkocolombo1994/FlutterSpesApp/commit/3b3d33ea8ae1446e394df72b9ef6750d8f1c5737))
+* multiple promo products counting ([12188c2](https://github.com/mirkocolombo1994/FlutterSpesApp/commit/12188c282a9b768866e50d12bfa0174b9d7c80b9))
+* promo produycts quantity not editable ([b19b536](https://github.com/mirkocolombo1994/FlutterSpesApp/commit/b19b536b7ef8b6d1f6d6ae64275bb67298ee5eae))
+* promo validation when adding products ([815e26d](https://github.com/mirkocolombo1994/FlutterSpesApp/commit/815e26dd20edd59afb50a47e0c1a08f850e5259c))
+
+
+### ✨ Nuove Funzionalità
+
+* (ai) add predictive algorithms and visual AI services ([ca9c8a0](https://github.com/mirkocolombo1994/FlutterSpesApp/commit/ca9c8a0e757bda651b6d1d67a3e74baf7514f4f4))
+* (promo) implementato motore promozionale intelligente con estensione e pulizia automatica ([8c63cbe](https://github.com/mirkocolombo1994/FlutterSpesApp/commit/8c63cbeca85d375f4284655d73fb5de89f732576))
+* (scan) implement superfast barcode scanner dialog with background OFF and camera fallback ([21c67bd](https://github.com/mirkocolombo1994/FlutterSpesApp/commit/21c67bd67e229d9e054859fc567e02081a0ed722))
+* added new settings ([11d0a70](https://github.com/mirkocolombo1994/FlutterSpesApp/commit/11d0a70f66a12296afb6a02eaf8d9405525f8217))
+* added promo in kart with  promo definition by class ([7188d71](https://github.com/mirkocolombo1994/FlutterSpesApp/commit/7188d719894f66a74979c29d0a0e76f60610a8c4))
+* added promotions and fixed bugs like scroll list when adding products and fresh product price ([3d88d65](https://github.com/mirkocolombo1994/FlutterSpesApp/commit/3d88d65e8059876453a717bb9ce33317600a88bf))
+* added promotions handling ([8429272](https://github.com/mirkocolombo1994/FlutterSpesApp/commit/842927269cfb5247b69c7dc714ef8f03738dc98c))
+* added with OFF other informations ([92427a6](https://github.com/mirkocolombo1994/FlutterSpesApp/commit/92427a656364bf11f067d9b168509e5058c1d6e2))
+* deleting store products ([27584e3](https://github.com/mirkocolombo1994/FlutterSpesApp/commit/27584e3af5b9ce9994caf4694f4ec0b5d763e3c0))
+* fresh products handling ([264b573](https://github.com/mirkocolombo1994/FlutterSpesApp/commit/264b5738aff48d778d09f8cc58567094c0d05f37))
+* implemented barcode validation ([8634bef](https://github.com/mirkocolombo1994/FlutterSpesApp/commit/8634bef134473a4935f452d486eb5956804ef050))
+* improved spg location relevation and user timeout refresh ([3c1ea3a](https://github.com/mirkocolombo1994/FlutterSpesApp/commit/3c1ea3ade65066d25271c244b80ce4e8a0e1b37a))
+* retrieve image form OFF ([55f3be4](https://github.com/mirkocolombo1994/FlutterSpesApp/commit/55f3be4b5e3e3341a6338fc1854fe207a07a1fd4))
+
 ### [0.4.0] - 2026-04-10
 
 ### ✨ Nuove Funzionalità
